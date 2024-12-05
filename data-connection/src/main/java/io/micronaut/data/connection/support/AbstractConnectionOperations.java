@@ -17,6 +17,7 @@ package io.micronaut.data.connection.support;
 
 import io.micronaut.core.annotation.Internal;
 import io.micronaut.core.annotation.NonNull;
+import io.micronaut.core.order.OrderUtil;
 import io.micronaut.core.propagation.PropagatedContext;
 import io.micronaut.core.propagation.PropagatedContextElement;
 import io.micronaut.data.connection.exceptions.ConnectionException;
@@ -29,6 +30,8 @@ import io.micronaut.data.connection.SynchronousConnectionManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -44,6 +47,23 @@ import java.util.function.Supplier;
 public abstract class AbstractConnectionOperations<C> implements ConnectionOperations<C>, SynchronousConnectionManager<C> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass());
+
+    private final List<ConnectionCustomizer<C>> connectionCustomizers = new ArrayList<>(10);
+
+    /**
+     * Adds a connection customizer to the list of customizers that will be notified before or after a call to the underlying data repository
+     * is issues.
+     *
+     * The added customizer will be sorted according to its order using the {@link OrderUtil#sort(List)} method.
+     *
+     * @param connectionCustomizer the connection customizer to add
+     *
+     * @since 4.11
+     */
+    public void addConnectionCustomizer(@NonNull ConnectionCustomizer<C> connectionCustomizer) {
+        connectionCustomizers.add(connectionCustomizer);
+        OrderUtil.sort(connectionCustomizers);
+    }
 
     /**
      * Opens a new connection.
@@ -84,6 +104,10 @@ public abstract class AbstractConnectionOperations<C> implements ConnectionOpera
     @Override
     public final <R> R execute(@NonNull ConnectionDefinition definition, @NonNull Function<ConnectionStatus<C>, R> callback) {
         ConnectionPropagatedContextElement<C> existingConnection = findContextElement().orElse(null);
+        for (ConnectionCustomizer<C> connectionCustomizer : connectionCustomizers) {
+            callback = connectionCustomizer.intercept(callback);
+        }
+        @NonNull Function<ConnectionStatus<C>, R> finalCallback = callback;
         return switch (definition.getPropagationBehavior()) {
             case REQUIRED -> {
                 if (existingConnection == null) {
@@ -101,7 +125,7 @@ public abstract class AbstractConnectionOperations<C> implements ConnectionOpera
                 if (existingConnection == null) {
                     yield executeWithNewConnection(definition, callback);
                 }
-                yield suspend(existingConnection, () -> executeWithNewConnection(definition, callback));
+                yield suspend(existingConnection, () -> executeWithNewConnection(definition, finalCallback));
             }
         };
     }
@@ -235,7 +259,6 @@ public abstract class AbstractConnectionOperations<C> implements ConnectionOpera
         });
         return newStatus;
     }
-
 
     private record ConnectionPropagatedContextElement<C>(
         ConnectionOperations<C> connectionOperations,
