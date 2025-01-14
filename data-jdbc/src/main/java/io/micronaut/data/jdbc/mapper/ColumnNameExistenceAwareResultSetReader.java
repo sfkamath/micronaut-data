@@ -55,12 +55,16 @@ public class ColumnNameExistenceAwareResultSetReader extends AbstractDelegatingR
                 int columnsCount = rsmd.getColumnCount();
                 knownColumns = CollectionUtils.newHashSet(columnsCount);
                 for (int x = 1; x <= columnsCount; x++) {
-                    knownColumns.add(rsmd.getColumnLabel(x).toLowerCase());
+                    knownColumns.add(toLowerCase(rsmd.getColumnLabel(x)));
                 }
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
         }
-        return knownColumns.contains(name);
+        return knownColumns.contains(toLowerCase(name));
+    }
+
+    private static String toLowerCase(String str) {
+        return str == null ? null : str.toLowerCase();
     }
 }
