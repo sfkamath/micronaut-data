@@ -1,0 +1,17 @@
+datasources:
+  default:
+    driverClassName: oracle.jdbc.OracleDriver
+    dialect: ORACLE
+    # This example does not execute DDL; leave CREATE for local dev convenience
+    schema-generate: CREATE
+
+# Confluent Schema Registry configuration (set via env or gradle.properties for real use)
+schemaRegistry:
+  url: ${SR_URL:`https://localhost:8081`}
+  key: ${SR_KEY:}
+  secret: ${SR_SECRET:}
+
+# Control runtime behavior: default disabled to avoid network calls during build/tests
+jsonschema:
+  sync:
+    enabled: false
