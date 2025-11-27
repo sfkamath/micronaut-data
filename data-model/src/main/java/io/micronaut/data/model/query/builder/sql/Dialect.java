@@ -148,6 +148,8 @@ public enum Dialect {
     public final DataType getDataType(@NonNull DataType type) {
         if (type == DataType.UUID && this.stringUUID) {
             return DataType.STRING;
+        } else if (type == DataType.DURATION || type == DataType.PERIOD) {
+            return this == Dialect.ORACLE ? type : DataType.STRING;
         } else {
             return type;
         }
