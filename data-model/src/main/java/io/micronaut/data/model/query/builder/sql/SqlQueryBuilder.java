@@ -43,6 +43,7 @@ import io.micronaut.data.model.PersistentEntity;
 import io.micronaut.data.model.PersistentEntityUtils;
 import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.PersistentPropertyPath;
+import io.micronaut.data.model.geo.GeoJson;
 import io.micronaut.data.model.jpa.criteria.impl.DefaultPersistentPropertyPath;
 import io.micronaut.data.model.jpa.criteria.impl.DefaultOrder;
 import io.micronaut.data.model.naming.NamingStrategy;
@@ -316,7 +317,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
     @Experimental
     @NonNull
     public String[] buildCreateTableStatements(@NonNull PersistentEntity entity) {
-        List<SqlTableMapping> tables = SqlSchemaUtils.getSqlTableMappings(entity);
+        List<SqlTableMapping> tables = SqlSchemaUtils.getSqlTableMappings(entity, getDialect());
         assert CollectionUtils.isNotEmpty(tables);
         boolean escape = shouldEscape(entity);
         String schema = SqlQueryBuilderUtils.getSchemaName(entity);
@@ -333,6 +334,12 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
         return createStatements.toArray(new String[0]);
     }
 
+    @Experimental
+    @NonNull
+    public final String[] buildCreateTableStatements (@NonNull PersistentEntity...entities){
+        return buildCreateTableStatements(entities, getDialect());
+    }
+
     /**
      * Builds the creation table statement for collection of entities. Designed for testing and not production usage. For production a
      * SQL migration tool such as Flyway or Liquibase is recommended.
@@ -342,14 +349,14 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
      */
     @Experimental
     @NonNull
-    public String[] buildCreateTableStatements(PersistentEntity[] entities) {
+    public String[] buildCreateTableStatements(PersistentEntity[] entities, Dialect dialect) {
         Map<String, SqlTableMapping> sqlTableMappingByTableName = CollectionUtils.newLinkedHashMap(entities.length);
         // Entity can generate indexes, sequences, join tables so need some longer map
         List<String> createStatements = new ArrayList<>(entities.length * 5);
         for (PersistentEntity entity : entities) {
             String schema = SqlQueryBuilderUtils.getSchemaName(entity);
             boolean escape = shouldEscape(entity);
-            List<SqlTableMapping> tables = SqlSchemaUtils.getSqlTableMappings(entity);
+            List<SqlTableMapping> tables = SqlSchemaUtils.getSqlTableMappings(entity,dialect);
             if (StringUtils.isNotEmpty(schema)) {
                 String createSchemaStatement = "CREATE SCHEMA " + (escape ? quote(schema) : schema) + ";";
                 addToCollectionIfNotContains(createStatements, createSchemaStatement);
@@ -979,18 +986,25 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
         if (transformer != null) {
             return values.add(transformer);
         }
+        String param = formatParameter(values.size() + 1).name();
         if (dt == DataType.JSON) {
             switch (dialect) {
-                case POSTGRES ->
-                    values.add("to_json(" + formatParameter(values.size() + 1).name() + "::json)");
-                case H2 -> values.add(formatParameter(values.size() + 1).name() + " FORMAT JSON");
-                case MYSQL ->
-                    values.add("CONVERT(" + formatParameter(values.size() + 1).name() + " USING UTF8MB4)");
-                default -> values.add(formatParameter(values.size() + 1).name());
+                case POSTGRES -> values.add("to_json(" + param + "::json)");
+                case H2 -> values.add(param + " FORMAT JSON");
+                case MYSQL -> values.add("CONVERT(" + param + " USING UTF8MB4)");
+                default -> values.add(param);
             }
             return true;
         }
-        return values.add(formatParameter(values.size() + 1).name());
+        if (property.isAssignable(GeoJson.class)) {
+            switch (dialect) {
+                case ORACLE -> values.add("SDO_UTIL.FROM_GEOJSON(" + param + ")");
+                case MYSQL, POSTGRES -> values.add("ST_GeomFromGeoJSON(" + param + ")");
+                default -> values.add(param);
+            }
+            return true;
+        }
+        return values.add(param);
     }
 
     @Override
@@ -1015,6 +1029,21 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
                     sb.append("to_json(");
                     appendParameter.run();
                     sb.append("::json)");
+                    break;
+                default:
+                    super.appendUpdateSetParameter(sb, alias, prop, appendParameter);
+            }
+        } else if (prop.isAssignable(GeoJson.class)) {
+            switch (dialect) {
+                case ORACLE:
+                    sb.append("SDO_UTIL.FROM_GEOJSON(");
+                    appendParameter.run();
+                    sb.append(")");
+                    break;
+                case MYSQL, POSTGRES:
+                    sb.append("ST_GeomFromGeoJSON(");
+                    appendParameter.run();
+                    sb.append(")");
                     break;
                 default:
                     super.appendUpdateSetParameter(sb, alias, prop, appendParameter);

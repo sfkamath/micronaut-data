@@ -270,7 +270,7 @@ public class SchemaGenerator {
         // that represents join and ad-hoc SqlTableMapping for the same entity based on relation mappings (to be removed/skipped)
         Map<String, SqlTableMapping> sqlTableMappingByTableName = CollectionUtils.newLinkedHashMap(entities.length);
         for (PersistentEntity entity : entities) {
-            List<SqlTableMapping> sqlTableMappings = SqlSchemaUtils.getSqlTableMappings(entity);
+            List<SqlTableMapping> sqlTableMappings = SqlSchemaUtils.getSqlTableMappings(entity, dialect);
             for (SqlTableMapping sqlTableMapping : sqlTableMappings) {
                 String tableName = sqlTableMapping.name();
                 String tableNameLowerCase = tableName.toLowerCase();

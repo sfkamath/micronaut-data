@@ -37,6 +37,7 @@ import io.micronaut.data.model.PersistentEntity;
 import io.micronaut.data.model.PersistentEntityUtils;
 import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.PersistentPropertyPath;
+import io.micronaut.data.model.geo.GeoJson;
 import io.micronaut.data.model.naming.NamingStrategy;
 import io.micronaut.data.model.schema.sql.SqlColumnMapping;
 import io.micronaut.data.model.schema.sql.SqlDbType;
@@ -95,7 +96,7 @@ public final class SqlSchemaUtils {
     @Experimental
     @NonNull
     @SuppressWarnings("java:S3776")
-    public static List<SqlTableMapping> getSqlTableMappings(@NonNull PersistentEntity entity) {
+    public static List<SqlTableMapping> getSqlTableMappings(@NonNull PersistentEntity entity, @NonNull Dialect dialect) {
         ArgumentUtils.requireNonNull("entity", entity);
 
         final String tableName = entity.getPersistedName();
@@ -143,24 +144,24 @@ public final class SqlSchemaUtils {
                         PersistentPropertyPath pp = leftProperties.get(i);
                         String columnName = leftJoinTableColumns.get(i);
                         // TODO: Should we treat join table fields as primary keys?
-                        columns.add(getColumnDefinition(pp.getProperty(), columnName, false, true, true));
+                        columns.add(getColumnDefinition(pp.getProperty(), columnName, false, true, true, dialect));
                     }
                 } else {
                     for (PersistentPropertyPath pp : leftProperties) {
                         String columnName = namingStrategy.mappedJoinTableColumn(entity, pp.getAssociations(), pp.getProperty());
-                        columns.add(getColumnDefinition(pp.getProperty(), columnName, false, true, true));
+                        columns.add(getColumnDefinition(pp.getProperty(), columnName, false, true, true, dialect));
                     }
                 }
                 if (rightJoinTableColumns.size() == rightProperties.size()) {
                     for (int i = 0; i < rightJoinTableColumns.size(); i++) {
                         PersistentPropertyPath pp = rightProperties.get(i);
                         String columnName = rightJoinTableColumns.get(i);
-                        columns.add(getColumnDefinition(pp.getProperty(), columnName, false, true, true));
+                        columns.add(getColumnDefinition(pp.getProperty(), columnName, false, true, true, dialect));
                     }
                 } else {
                     for (PersistentPropertyPath pp : rightProperties) {
                         String columnName = namingStrategy.mappedJoinTableColumn(entity, pp.getAssociations(), pp.getProperty());
-                        columns.add(getColumnDefinition(pp.getProperty(), columnName, false, true, true));
+                        columns.add(getColumnDefinition(pp.getProperty(), columnName, false, true, true, dialect));
                     }
                 }
                 SqlTableMapping joinTable = new SqlTableMapping(joinTableSchema, joinTableName, escape, SqlTableMapping.TableType.JOIN, null, columns);
@@ -169,21 +170,21 @@ public final class SqlSchemaUtils {
         }
 
         List<PersistentProperty> identities = entity.getIdentityProperties();
-        List<SqlColumnMapping> primaryKeyColumns = getPrimaryKeyColumns(identities, namingStrategy);
+        List<SqlColumnMapping> primaryKeyColumns = getPrimaryKeyColumns(identities, namingStrategy, dialect);
 
         List<SqlColumnMapping> columns = new ArrayList<>();
 
         PersistentProperty version = entity.getVersion();
         if (version != null && !version.isGenerated()) {
             String columnName = namingStrategy.mappedName(Collections.emptyList(), version);
-            SqlColumnMapping column = getColumnDefinition(version, columnName, false, true, false);
+            SqlColumnMapping column = getColumnDefinition(version, columnName, false, true, false, dialect);
             columns.add(column);
         }
 
         BiConsumer<List<Association>, PersistentProperty> addColumn = (associations, property) -> {
             String columnName = namingStrategy.mappedName(associations, property);
             SqlColumnMapping column = getColumnDefinition(property, columnName, false, isRequired(associations, property),
-                !SqlQueryBuilderUtils.isNotForeign(associations));
+                !SqlQueryBuilderUtils.isNotForeign(associations), dialect);
             columns.add(column);
         };
 
@@ -213,12 +214,12 @@ public final class SqlSchemaUtils {
      * @throws MappingException      if the data type of the property is unknown
      */
     private static SqlColumnMapping getColumnDefinition(PersistentProperty prop, String column, boolean primaryKey, boolean required,
-                                                        boolean isForeign) {
+                                                        boolean isForeign, Dialect dialect) {
         if (prop instanceof Association) {
             throw new IllegalStateException("Association is not supported here");
         }
         AnnotationMetadata annotationMetadata = prop.getAnnotationMetadata();
-        String definition = annotationMetadata.stringValue(MappedProperty.class, "definition").orElse(null);
+        String definition = getDefinition(prop, dialect);
         DataType dataType = prop.getDataType();
         boolean autoGenerated = !isForeign && prop.isGenerated();
         GeneratedValue.Type generatedValueType = autoGenerated ? prop.getAnnotationMetadata().enumValue(GeneratedValue.class, GeneratedValue.Type.class)
@@ -278,6 +279,30 @@ public final class SqlSchemaUtils {
         };
     }
 
+    private static String getDefinition(PersistentProperty prop, Dialect dialect) {
+        AnnotationMetadata annotationMetadata = prop.getAnnotationMetadata();
+        Optional<String> definitionOpt = annotationMetadata.stringValue(MappedProperty.class, "definition");
+        if (definitionOpt.isPresent()) {
+            return definitionOpt.get();
+        }
+
+        if (prop.isAssignable(GeoJson.class)) {
+
+            if (dialect == Dialect.ORACLE) {
+                return "SDO_GEOMETRY";
+            }
+            if (dialect == Dialect.MYSQL) {
+                return "GEOMETRY";
+                /*String typeName = prop.getTypeName();
+                if (Point.class.getName().equals(typeName)) {
+                    return "POINT";
+                }*/
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Returns the database type corresponding to the given persistent property.
      *
@@ -307,6 +332,7 @@ public final class SqlSchemaUtils {
             case JSON -> SqlDbType.JSON;
             case STRING_ARRAY, CHARACTER_ARRAY, SHORT_ARRAY, INTEGER_ARRAY,
                 LONG_ARRAY, FLOAT_ARRAY, DOUBLE_ARRAY, BOOLEAN_ARRAY -> SqlDbType.ARRAY;
+            //case POINT ->  SqlDbType.POINT;
             default -> {
                 if (property.isEnum()) {
                     yield SqlDbType.ENUM;
@@ -381,7 +407,7 @@ public final class SqlSchemaUtils {
         return indexMappings;
     }
 
-    private static List<SqlColumnMapping> getPrimaryKeyColumns(List<PersistentProperty> identities, NamingStrategy namingStrategy) {
+    private static List<SqlColumnMapping> getPrimaryKeyColumns(List<PersistentProperty> identities, NamingStrategy namingStrategy, Dialect dialect) {
         List<SqlColumnMapping> primaryKeyColumns = new ArrayList<>(identities.size());
         for (PersistentProperty identity : identities) {
             List<PersistentPropertyPath> ids = new ArrayList<>();
@@ -390,7 +416,7 @@ public final class SqlSchemaUtils {
             for (PersistentPropertyPath pp : ids) {
                 String columnName = namingStrategy.mappedName(pp.getAssociations(), pp.getProperty());
                 SqlColumnMapping column = getColumnDefinition(pp.getProperty(), columnName, true,
-                    isRequired(pp.getAssociations(), pp.getProperty()), !SqlQueryBuilderUtils.isNotForeign(pp.getAssociations()));
+                    isRequired(pp.getAssociations(), pp.getProperty()), !SqlQueryBuilderUtils.isNotForeign(pp.getAssociations()), dialect);
                 primaryKeyColumns.add(column);
             }
         }

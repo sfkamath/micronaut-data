@@ -44,6 +44,7 @@ import io.micronaut.data.model.PersistentEntityUtils;
 import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.PersistentPropertyPath;
 import io.micronaut.data.model.Sort;
+import io.micronaut.data.model.geo.GeoJson;
 import io.micronaut.data.model.jpa.criteria.ExpressionType;
 import io.micronaut.data.model.jpa.criteria.IExpression;
 import io.micronaut.data.model.jpa.criteria.IPredicate;
@@ -3039,16 +3040,26 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
             } else {
                 String column = getMappedName(namingStrategy, associations, property);
                 column = escapeColumnIfNeeded(column, escape);
-                if (tableAlias == null) {
-                    sb.append(column);
-                } else {
-                    sb.append(tableAlias).append(DOT).append(column);
+                if (tableAlias != null) {
+                    column = tableAlias + DOT + column;
                 }
-                if (useAlias) {
-                    sb.append(AS_CLAUSE).append(columnAlias);
+                if (property.isAssignable(GeoJson.class)) {
+                    sb.append(addGeoJsonFunction(column, useAlias ? columnAlias : property.getName()));
+                } else if (useAlias) {
+                    sb.append(column).append(AS_CLAUSE).append(columnAlias);
+                } else {
+                    sb.append(column);
                 }
             }
             sb.append(COMMA);
+        }
+
+        private String addGeoJsonFunction(String column, String columnAlias) {
+            return switch (getDialect()) {
+                case ORACLE -> "SDO_UTIL.TO_GEOJSON(" +  column + ")" + AS_CLAUSE + columnAlias;
+                case MYSQL, POSTGRES -> "ST_AsGeoJSON(" + column + ")" + AS_CLAUSE + columnAlias;
+                default -> column + AS_CLAUSE + columnAlias;
+            };
         }
 
         private void appendFunction(String functionName, Expression<?> expression) {
