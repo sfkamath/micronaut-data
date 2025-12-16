@@ -21,7 +21,7 @@ abstract class AbstractGeoSpec extends Specification {
         given:
         GeoEntity entity = new GeoEntity()
         Point point = new Point(2.0, 2.5)
-        MultiPoint multiPoint = new MultiPoint(new Point(1.5, 2.5), new Point(2.5, 3.5))
+        MultiPoint multiPoint = new MultiPoint([new Point(1.5, 2.5), new Point(2.5, 3.5)])
         entity.setPoint(point)
         entity.setMultiPoint(multiPoint)
 

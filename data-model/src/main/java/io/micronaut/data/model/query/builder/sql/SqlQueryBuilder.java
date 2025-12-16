@@ -43,7 +43,7 @@ import io.micronaut.data.model.PersistentEntity;
 import io.micronaut.data.model.PersistentEntityUtils;
 import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.PersistentPropertyPath;
-import io.micronaut.data.model.geo.GeoEntity;
+import io.micronaut.data.model.geo.GeoJson;
 import io.micronaut.data.model.jpa.criteria.impl.DefaultPersistentPropertyPath;
 import io.micronaut.data.model.jpa.criteria.impl.DefaultOrder;
 import io.micronaut.data.model.naming.NamingStrategy;
@@ -996,7 +996,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
             }
             return true;
         }
-        if (property.isAssignable(GeoEntity.class)) {
+        if (property.isAssignable(GeoJson.class)) {
             switch (dialect) {
                 case ORACLE -> values.add("SDO_UTIL.FROM_GEOJSON(" + param + ")");
                 case MYSQL, POSTGRES -> values.add("ST_GeomFromGeoJSON(" + param + ")");
@@ -1033,7 +1033,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
                 default:
                     super.appendUpdateSetParameter(sb, alias, prop, appendParameter);
             }
-        } else if (prop.isAssignable(GeoEntity.class)) {
+        } else if (prop.isAssignable(GeoJson.class)) {
             switch (dialect) {
                 case ORACLE:
                     sb.append("SDO_UTIL.FROM_GEOJSON(");
