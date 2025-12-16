@@ -1,4 +1,4 @@
 package io.micronaut.data.model.geo;
 
-public interface GeoJson {
+public interface GeoEntity {
 }

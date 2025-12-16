@@ -5,5 +5,5 @@ import io.micronaut.data.model.DataType;
 import io.micronaut.data.model.runtime.convert.geo.GeoEntityConverter;
 
 @TypeDef(type = DataType.STRING, converter = GeoEntityConverter.class)
-public record Point(double x, double y) implements GeoEntity {
+public record MultiPoint(Point... points) implements GeoEntity {
 }

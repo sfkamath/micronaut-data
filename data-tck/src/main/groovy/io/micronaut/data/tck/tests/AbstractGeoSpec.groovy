@@ -1,6 +1,7 @@
 package io.micronaut.data.tck.tests
 
 import io.micronaut.context.ApplicationContext
+import io.micronaut.data.model.geo.MultiPoint
 import io.micronaut.data.model.geo.Point
 import io.micronaut.data.tck.jdbc.entities.GeoEntity
 import io.micronaut.data.tck.repositories.GeoEntityRepository
@@ -20,7 +21,9 @@ abstract class AbstractGeoSpec extends Specification {
         given:
         GeoEntity entity = new GeoEntity()
         Point point = new Point(2.0, 2.5)
-        entity.setLocation(point)
+        MultiPoint multiPoint = new MultiPoint(new Point(1.5, 2.5), new Point(2.5, 3.5))
+        entity.setPoint(point)
+        entity.setMultiPoint(multiPoint)
 
         when:
         GeoEntity savedEntity = getGeoEntityRepository().save(entity)
@@ -33,17 +36,17 @@ abstract class AbstractGeoSpec extends Specification {
 
         then:
         foundEntity.isPresent()
-        foundEntity.get().getLocation().x() == 2.0d
-        foundEntity.get().getLocation().y() == 2.5d
+        foundEntity.get().getPoint().x() == 2.0d
+        foundEntity.get().getPoint().y() == 2.5d
 
         when:
-        entity.setLocation(new Point(3.0, 3.5))
+        entity.setPoint(new Point(3.0, 3.5))
         getGeoEntityRepository().update(entity)
         foundEntity = getGeoEntityRepository().findById(savedEntity.id)
 
         then:
         foundEntity.isPresent()
-        foundEntity.get().getLocation().x() == 3.0d
-        foundEntity.get().getLocation().y() == 3.5d
+        foundEntity.get().getPoint().x() == 3.0d
+        foundEntity.get().getPoint().y() == 3.5d
     }
 }

@@ -3,6 +3,7 @@ package io.micronaut.data.tck.jdbc.entities;
 import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.Id;
 import io.micronaut.data.annotation.MappedEntity;
+import io.micronaut.data.model.geo.MultiPoint;
 import io.micronaut.data.model.geo.Point;
 
 @MappedEntity
@@ -12,7 +13,9 @@ public class GeoEntity {
     @GeneratedValue
     private Long id;
 
-    private Point location;
+    private Point point;
+
+    private MultiPoint multiPoint;
 
     public Long getId() {
         return id;
@@ -22,11 +25,19 @@ public class GeoEntity {
         this.id = id;
     }
 
-    public Point getLocation() {
-        return location;
+    public Point getPoint() {
+        return point;
     }
 
-    public void setLocation(Point location) {
-        this.location = location;
+    public void setPoint(Point point) {
+        this.point = point;
+    }
+
+    public MultiPoint getMultiPoint() {
+        return multiPoint;
+    }
+
+    public void setMultiPoint(MultiPoint multiPoint) {
+        this.multiPoint = multiPoint;
     }
 }

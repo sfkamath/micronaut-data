@@ -44,7 +44,7 @@ import io.micronaut.data.model.PersistentEntityUtils;
 import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.PersistentPropertyPath;
 import io.micronaut.data.model.Sort;
-import io.micronaut.data.model.geo.GeoJson;
+import io.micronaut.data.model.geo.GeoEntity;
 import io.micronaut.data.model.jpa.criteria.ExpressionType;
 import io.micronaut.data.model.jpa.criteria.IExpression;
 import io.micronaut.data.model.jpa.criteria.IPredicate;
@@ -3040,15 +3040,13 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
             } else {
                 String column = getMappedName(namingStrategy, associations, property);
                 column = escapeColumnIfNeeded(column, escape);
-                if (tableAlias != null) {
-                    column = tableAlias + DOT + column;
-                }
-                if (property.isAssignable(GeoJson.class)) {
-                    sb.append(addGeoJsonFunction(column, useAlias ? columnAlias : property.getName()));
+                String columnWithTableAlias = tableAlias == null ? column : tableAlias + DOT + column;
+                if (property.isAssignable(GeoEntity.class)) {
+                    sb.append(addGeoJsonFunction(columnWithTableAlias, useAlias ? columnAlias : column));
                 } else if (useAlias) {
-                    sb.append(column).append(AS_CLAUSE).append(columnAlias);
+                    sb.append(columnWithTableAlias).append(AS_CLAUSE).append(columnAlias);
                 } else {
-                    sb.append(column);
+                    sb.append(columnWithTableAlias);
                 }
             }
             sb.append(COMMA);
