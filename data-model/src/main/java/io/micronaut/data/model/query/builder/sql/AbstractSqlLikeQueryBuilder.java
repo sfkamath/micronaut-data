@@ -3054,10 +3054,14 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
 
         private String addGeoJsonFunction(String column, String columnAlias) {
             return switch (getDialect()) {
-                case ORACLE -> "SDO_UTIL.TO_GEOJSON(" +  column + ")" + AS_CLAUSE + columnAlias;
+                case ORACLE -> addFuncToCaseExpr(column, "SDO_UTIL.TO_GEOJSON") + AS_CLAUSE + columnAlias;
                 case MYSQL, POSTGRES -> "ST_AsGeoJSON(" + column + ")" + AS_CLAUSE + columnAlias;
                 default -> column + AS_CLAUSE + columnAlias;
             };
+        }
+
+        private String addFuncToCaseExpr(String column, String function) {
+            return "CASE WHEN " +  column + " IS NOT NULL THEN " + function + "(" + column + ") ELSE NULL END";
         }
 
         private void appendFunction(String functionName, Expression<?> expression) {

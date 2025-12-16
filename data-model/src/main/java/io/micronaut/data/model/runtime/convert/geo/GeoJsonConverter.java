@@ -6,6 +6,8 @@ import io.micronaut.core.convert.ConversionContext;
 import io.micronaut.core.serialize.exceptions.SerializationException;
 import io.micronaut.core.util.StringUtils;
 import io.micronaut.data.model.geo.GeoJson;
+import io.micronaut.data.model.geo.LineString;
+import io.micronaut.data.model.geo.MultiLineString;
 import io.micronaut.data.model.geo.MultiPoint;
 import io.micronaut.data.model.geo.Point;
 import io.micronaut.data.model.runtime.convert.AttributeConverter;
@@ -28,6 +30,8 @@ public final class GeoJsonConverter implements AttributeConverter<GeoJson, Strin
     static {
         FROM_COORDS_FUNC_MAP.put(getType(Point.class), Point::fromCoords);
         FROM_COORDS_FUNC_MAP.put(getType(MultiPoint.class), MultiPoint::fromCoords);
+        FROM_COORDS_FUNC_MAP.put(getType(LineString.class), LineString::fromCoords);
+        FROM_COORDS_FUNC_MAP.put(getType(MultiLineString.class), MultiLineString::fromCoords);
     }
 
     private static final Map<String, Function<GeoJson, List>> AS_COORDS_FUNC_MAP = new HashMap<>();
@@ -35,6 +39,8 @@ public final class GeoJsonConverter implements AttributeConverter<GeoJson, Strin
     static {
         AS_COORDS_FUNC_MAP.put(getType(Point.class), entity -> ((Point) entity).asCoords());
         AS_COORDS_FUNC_MAP.put(getType(MultiPoint.class), entity -> ((MultiPoint) entity).asCoords());
+        AS_COORDS_FUNC_MAP.put(getType(LineString.class), entity -> ((LineString) entity).asCoords());
+        AS_COORDS_FUNC_MAP.put(getType(MultiLineString.class), entity -> ((MultiLineString) entity).asCoords());
     }
 
     private static String getType(Class<? extends GeoJson> entityClass) {

@@ -998,13 +998,17 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
         }
         if (property.isAssignable(GeoJson.class)) {
             switch (dialect) {
-                case ORACLE -> values.add("SDO_UTIL.FROM_GEOJSON(" + param + ")");
+                case ORACLE -> values.add(addFuncToCaseExpr(param, "SDO_UTIL.FROM_GEOJSON"));
                 case MYSQL, POSTGRES -> values.add("ST_GeomFromGeoJSON(" + param + ")");
                 default -> values.add(param);
             }
             return true;
         }
         return values.add(param);
+    }
+
+    private String addFuncToCaseExpr(String param, String function) {
+        return "CASE WHEN " +  param + " IS NOT NULL THEN " + function + "(" + param + ") ELSE NULL END";
     }
 
     @Override
