@@ -287,16 +287,11 @@ public final class SqlSchemaUtils {
         }
 
         if (prop.isAssignable(GeoJson.class)) {
-
             if (dialect == Dialect.ORACLE) {
                 return "SDO_GEOMETRY";
             }
-            if (dialect == Dialect.MYSQL) {
+            if (dialect == Dialect.MYSQL || dialect == Dialect.POSTGRES || dialect == Dialect.H2) {
                 return "GEOMETRY";
-                /*String typeName = prop.getTypeName();
-                if (Point.class.getName().equals(typeName)) {
-                    return "POINT";
-                }*/
             }
         }
 

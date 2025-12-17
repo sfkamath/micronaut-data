@@ -3055,7 +3055,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         private String addGeoJsonFunction(String column, String columnAlias) {
             return switch (getDialect()) {
                 case ORACLE -> addFuncToCaseExpr(column, "SDO_UTIL.TO_GEOJSON") + AS_CLAUSE + columnAlias;
-                case MYSQL, POSTGRES -> "ST_AsGeoJSON(" + column + ")" + AS_CLAUSE + columnAlias;
+                case MYSQL, POSTGRES, H2 -> "ST_AsGeoJSON(" + column + ")" + AS_CLAUSE + columnAlias;
                 default -> column + AS_CLAUSE + columnAlias;
             };
         }

@@ -999,7 +999,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
         if (property.isAssignable(GeoJson.class)) {
             switch (dialect) {
                 case ORACLE -> values.add(addFuncToCaseExpr(param, "SDO_UTIL.FROM_GEOJSON"));
-                case MYSQL, POSTGRES -> values.add("ST_GeomFromGeoJSON(" + param + ")");
+                case MYSQL, POSTGRES, H2 -> values.add("ST_GeomFromGeoJSON(" + param + ")");
                 default -> values.add(param);
             }
             return true;

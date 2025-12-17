@@ -26,7 +26,7 @@ public record Polygon(List<LineString> lineStrings) implements GeoJson {
             Point first = ring.points().getFirst();
             Point last = ring.points().getLast();
             if (!first.equals(last)) {
-                throw new IllegalArgumentException(String.format("Ring at index %d is not closed: first point does not equal last point", i));
+                throw new IllegalArgumentException(String.format("Ring at index %d is not closed: the first point is not equal to the last point", i));
             }
         }
     }
