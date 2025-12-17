@@ -7,6 +7,7 @@ import io.micronaut.data.model.geo.LineString;
 import io.micronaut.data.model.geo.MultiLineString;
 import io.micronaut.data.model.geo.MultiPoint;
 import io.micronaut.data.model.geo.Point;
+import io.micronaut.data.model.geo.Polygon;
 
 @MappedEntity
 public class GeoEntity {
@@ -22,6 +23,8 @@ public class GeoEntity {
     private LineString lineString;
 
     private MultiLineString multiLineString;
+
+    private Polygon polygon;
 
     public Long getId() {
         return id;
@@ -61,5 +64,13 @@ public class GeoEntity {
 
     public void setMultiLineString(MultiLineString multiLineString) {
         this.multiLineString = multiLineString;
+    }
+
+    public Polygon getPolygon() {
+        return polygon;
+    }
+
+    public void setPolygon(Polygon polygon) {
+        this.polygon = polygon;
     }
 }

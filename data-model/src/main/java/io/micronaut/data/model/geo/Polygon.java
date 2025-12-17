@@ -17,14 +17,17 @@ public record Polygon(List<LineString> lineStrings) implements GeoJson {
         if (CollectionUtils.isEmpty(lineStrings)) {
             throw new IllegalArgumentException("Polygon must have at least one ring (outer boundary)");
         }
-        LineString outerRing = lineStrings.getFirst();
-        if (outerRing.points() == null || outerRing.points().size() < 4) {
-            throw new IllegalArgumentException("Outer ring must have at least 4 points (closed and minimum size)");
-        }
-        Point first = outerRing.points().getFirst();
-        Point last = outerRing.points().getLast();
-        if (!first.equals(last)) {
-            throw new IllegalArgumentException("Outer ring is not closed: first point does not equal last point");
+        for (int i = 0; i < lineStrings.size(); i++) {
+            LineString ring = lineStrings.get(i);
+            if (ring.points() == null || ring.points().size() < 4) {
+                throw new IllegalArgumentException(
+                    String.format("Ring at index %d must have at least 4 points (got %d)", i, ring.points() == null ? 0 : ring.points().size()));
+            }
+            Point first = ring.points().getFirst();
+            Point last = ring.points().getLast();
+            if (!first.equals(last)) {
+                throw new IllegalArgumentException(String.format("Ring at index %d is not closed: first point does not equal last point", i));
+            }
         }
     }
 
@@ -34,10 +37,10 @@ public record Polygon(List<LineString> lineStrings) implements GeoJson {
             .collect(Collectors.toList());
     }
 
-    public static MultiLineString fromCoords(List<List<List<Double>>> coords) {
+    public static Polygon fromCoords(List<List<List<Double>>> coords) {
         if (CollectionUtils.isEmpty(coords)) {
             throw new IllegalArgumentException("Coordinates cannot be empty");
         }
-        return new MultiLineString(coords.stream().map(LineString::fromCoords).toList());
+        return new Polygon(coords.stream().map(LineString::fromCoords).toList());
     }
 }

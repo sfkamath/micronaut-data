@@ -5,6 +5,7 @@ import io.micronaut.data.model.geo.LineString
 import io.micronaut.data.model.geo.MultiLineString
 import io.micronaut.data.model.geo.MultiPoint
 import io.micronaut.data.model.geo.Point
+import io.micronaut.data.model.geo.Polygon
 import io.micronaut.data.tck.jdbc.entities.GeoEntity
 import io.micronaut.data.tck.repositories.GeoEntityRepository
 import spock.lang.AutoCleanup
@@ -160,6 +161,7 @@ abstract class AbstractGeoSpec extends Specification {
             it.lineStrings().get(0).points().get(0).y() == 1.2d
             it.lineStrings().get(0).points().get(1).x() == 1.3d
             it.lineStrings().get(0).points().get(1).y() == 1.4d
+            it.lineStrings().get(1).points().size() == 2
             it.lineStrings().get(1).points().get(0).x() == 2.1d
             it.lineStrings().get(1).points().get(0).y() == 2.2d
             it.lineStrings().get(1).points().get(1).x() == 2.3d
@@ -184,10 +186,90 @@ abstract class AbstractGeoSpec extends Specification {
             it.lineStrings().get(0).points().get(0).y() == 3.2d
             it.lineStrings().get(0).points().get(1).x() == 3.3d
             it.lineStrings().get(0).points().get(1).y() == 3.4d
+            it.lineStrings().get(1).points().size() == 2
             it.lineStrings().get(1).points().get(0).x() == 4.1d
             it.lineStrings().get(1).points().get(0).y() == 4.2d
             it.lineStrings().get(1).points().get(1).x() == 4.3d
             it.lineStrings().get(1).points().get(1).y() == 4.4d
+        }
+    }
+
+    void "test saving, reading and updating an entity with Polygon type"() {
+        given:
+        GeoEntity entity = new GeoEntity()
+        entity.setPolygon(new Polygon([
+                new LineString([new Point(1.0, 1.0),
+                                new Point(5.0, 1.0),
+                                new Point(5.0, 2.5),
+                                new Point(1.0, 2.5),
+                                new Point(1.0, 1.0)]),
+                new LineString([new Point(1.5, 1.5),
+                                new Point(2.5, 1.5),
+                                new Point(2.5, 2.0),
+                                new Point(1.5, 1.5)])
+        ]))
+
+        when:
+        GeoEntity savedEntity = getGeoEntityRepository().save(entity)
+
+        then:
+        savedEntity.id > 0
+
+        when:
+        Optional<GeoEntity> foundEntity = getGeoEntityRepository().findById(savedEntity.id)
+
+        then:
+        foundEntity.isPresent()
+        with (foundEntity.get().getPolygon().lineStrings()) {
+            it.size() == 2
+            it.get(0).points().size() == 5
+            it.get(0).points().get(0).x() == 1.0d
+            it.get(0).points().get(0).y() == 1.0d
+            it.get(0).points().get(1).x() == 5.0d
+            it.get(0).points().get(1).y() == 1.0d
+            it.get(0).points().get(2).x() == 5.0d
+            it.get(0).points().get(2).y() == 2.5d
+            it.get(0).points().get(3).x() == 1.0d
+            it.get(0).points().get(3).y() == 2.5d
+            it.get(0).points().get(4).x() == 1.0d
+            it.get(0).points().get(4).y() == 1.0d
+            it.get(1).points().size() == 4
+            it.get(1).points().get(0).x() == 1.5d
+            it.get(1).points().get(0).y() == 1.5d
+            it.get(1).points().get(1).x() == 2.5d
+            it.get(1).points().get(1).y() == 1.5d
+            it.get(1).points().get(2).x() == 2.5d
+            it.get(1).points().get(2).y() == 2.0d
+            it.get(1).points().get(3).x() == 1.5d
+            it.get(1).points().get(3).y() == 1.5d
+        }
+
+        when:
+        entity.setPolygon(new Polygon([
+                new LineString([new Point(1.0, 1.0),
+                                new Point(5.0, 1.0),
+                                new Point(5.0, 2.5),
+                                new Point(1.0, 2.5),
+                                new Point(1.0, 1.0)])
+        ]))
+        getGeoEntityRepository().update(entity)
+        foundEntity = getGeoEntityRepository().findById(savedEntity.id)
+
+        then:
+        foundEntity.isPresent()
+        with (foundEntity.get().getPolygon().lineStrings()) {
+            it.size() == 1
+            it.get(0).points().size() == 5
+            it.get(0).points().get(0).x() == 1.0d
+            it.get(0).points().get(0).y() == 1.0d
+            it.get(0).points().get(1).x() == 5.0d
+            it.get(0).points().get(1).y() == 1.0d
+            it.get(0).points().get(2).x() == 5.0d
+            it.get(0).points().get(2).y() == 2.5d
+            it.get(0).points().get(3).x() == 1.0d
+            it.get(0).points().get(3).y() == 2.5d
+            it.get(0).points().get(4).x() == 1.0d
+            it.get(0).points().get(4).y() == 1.0d
         }
     }
 }
