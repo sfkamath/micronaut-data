@@ -1044,7 +1044,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
                     appendParameter.run();
                     sb.append(")");
                     break;
-                case MYSQL, POSTGRES:
+                case MYSQL, POSTGRES, H2:
                     sb.append("ST_GeomFromGeoJSON(");
                     appendParameter.run();
                     sb.append(")");

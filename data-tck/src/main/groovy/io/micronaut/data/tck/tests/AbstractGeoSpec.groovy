@@ -304,7 +304,7 @@ abstract class AbstractGeoSpec extends Specification {
         }
     }
 
-    void "test saving, reading and updating an entity with Polygon type"() {
+    void "test saving, reading and updating an entity with MultiPolygon type"() {
         given:
         GeoEntity entity = new GeoEntity()
         entity.setMultiPolygon(new MultiPolygon([

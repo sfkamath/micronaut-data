@@ -39,6 +39,7 @@ benchmark-spring-data = "2025.1.0"
 spock = "2.2-groovy-4.0"
 testcontainers = "1.19.4"
 jmh = "1.37"
+h2gis = "2.2.3"
 
 # Gradle plugins
 
@@ -122,6 +123,8 @@ groovy-dateutil = { module = "org.apache.groovy:groovy-dateutil", version.ref = 
 
 jakarta-data-tck = { module = 'jakarta.data:jakarta.data-tck', version.ref = "managed-jakarta-data" }
 junit-platform-suite-engine = { module = "org.junit.platform:junit-platform-suite-engine" }
+
+h2gis = { module = "org.orbisgis:h2gis", version.ref = "h2gis"}
 
 # Benchmark
 
