@@ -44,7 +44,7 @@ import io.micronaut.data.model.PersistentEntityUtils;
 import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.PersistentPropertyPath;
 import io.micronaut.data.model.Sort;
-import io.micronaut.data.model.geo.GeoJson;
+import io.micronaut.data.model.geo.Geometry;
 import io.micronaut.data.model.jpa.criteria.ExpressionType;
 import io.micronaut.data.model.jpa.criteria.IExpression;
 import io.micronaut.data.model.jpa.criteria.IPredicate;
@@ -3041,7 +3041,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
                 String column = getMappedName(namingStrategy, associations, property);
                 column = escapeColumnIfNeeded(column, escape);
                 String columnWithTableAlias = tableAlias == null ? column : tableAlias + DOT + column;
-                if (property.isAssignable(GeoJson.class)) {
+                if (property.isAssignable(Geometry.class)) {
                     sb.append(addGeoJsonFunction(columnWithTableAlias, useAlias ? columnAlias : column));
                 } else if (useAlias) {
                     sb.append(columnWithTableAlias).append(AS_CLAUSE).append(columnAlias);

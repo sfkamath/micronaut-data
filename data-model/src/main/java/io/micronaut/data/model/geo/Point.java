@@ -18,16 +18,15 @@ package io.micronaut.data.model.geo;
 import io.micronaut.core.util.CollectionUtils;
 import io.micronaut.data.annotation.TypeDef;
 import io.micronaut.data.model.DataType;
-import io.micronaut.data.model.runtime.convert.geo.GeoJsonConverter;
+import io.micronaut.data.model.runtime.convert.geo.GeometryConverter;
 import io.micronaut.serde.annotation.Serdeable;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
  * A record that represents a two-dimensional point with {@code x} and {@code y} coordinates.
  *
- * <p>This record implements the {@link GeoJson} interface and can be used in geographic
+ * <p>This record implements the {@link Geometry} interface and can be used in geographic
  * data models compliant with the GeoJSON specification. The coordinates are interpreted
  * as (longitude, latitude) or (x, y) depending on context.
  *
@@ -36,8 +35,8 @@ import java.util.List;
  * @since 5.0
  */
 @Serdeable
-@TypeDef(type = DataType.STRING, converter = GeoJsonConverter.class)
-public record Point(double x, double y) implements GeoJson {
+@TypeDef(type = DataType.STRING, converter = GeometryConverter.class)
+public record Point(double x, double y) implements Geometry {
 
     /**
      * Returns the coordinates of this point as a list of two {@code Double} values.
@@ -45,7 +44,7 @@ public record Point(double x, double y) implements GeoJson {
      * @return a list containing the x and y coordinates, in that order
      */
     public List<Double> asCoords() {
-        return Arrays.asList(x, y);
+        return List.of(x, y);
     }
 
     /**

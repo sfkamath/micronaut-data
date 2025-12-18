@@ -3,15 +3,14 @@ package io.micronaut.data.model.geo;
 import io.micronaut.core.util.CollectionUtils;
 import io.micronaut.data.annotation.TypeDef;
 import io.micronaut.data.model.DataType;
-import io.micronaut.data.model.runtime.convert.geo.GeoJsonConverter;
+import io.micronaut.data.model.runtime.convert.geo.GeometryConverter;
 import io.micronaut.serde.annotation.Serdeable;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Serdeable
-@TypeDef(type = DataType.STRING, converter = GeoJsonConverter.class)
-public record LineString(List<Point> points) implements GeoJson {
+@TypeDef(type = DataType.STRING, converter = GeometryConverter.class)
+public record LineString(List<Point> points) implements Geometry {
 
     public LineString {
         if (CollectionUtils.isEmpty(points) || points.size() < 2) {
@@ -22,7 +21,7 @@ public record LineString(List<Point> points) implements GeoJson {
     public List<List<Double>> asCoords() {
         return points.stream()
             .map(Point::asCoords)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public static LineString fromCoords(List<List<Double>> coords) {

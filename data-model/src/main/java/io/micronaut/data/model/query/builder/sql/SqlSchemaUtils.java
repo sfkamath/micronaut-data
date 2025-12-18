@@ -37,7 +37,7 @@ import io.micronaut.data.model.PersistentEntity;
 import io.micronaut.data.model.PersistentEntityUtils;
 import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.PersistentPropertyPath;
-import io.micronaut.data.model.geo.GeoJson;
+import io.micronaut.data.model.geo.Geometry;
 import io.micronaut.data.model.naming.NamingStrategy;
 import io.micronaut.data.model.schema.sql.SqlColumnMapping;
 import io.micronaut.data.model.schema.sql.SqlDbType;
@@ -286,7 +286,7 @@ public final class SqlSchemaUtils {
             return definitionOpt.get();
         }
 
-        if (prop.isAssignable(GeoJson.class)) {
+        if (prop.isAssignable(Geometry.class)) {
             if (dialect == Dialect.ORACLE) {
                 return "SDO_GEOMETRY";
             }
