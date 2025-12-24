@@ -84,3 +84,4 @@ io.micronaut.data.processor.mappers.jakarta.data.JakartaDataPersistMapper
 io.micronaut.data.processor.mappers.jakarta.data.JakartaDataDetachMapper
 io.micronaut.data.processor.mappers.jakarta.data.JakartaDataRefreshMapper
 io.micronaut.data.processor.mappers.jakarta.data.JakartaDataRemoveMapper
+io.micronaut.data.processor.mappers.sql.ETagAnnotationMapper
