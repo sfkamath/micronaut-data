@@ -1340,9 +1340,8 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         }
         QueryPropertyPath propertyPath = queryState.findProperty(pp);
         String tableAlias = propertyPath.getTableAlias();
-        PersistentProperty prop = propertyPath.getProperty();
-        boolean isETagProperty = prop.getAnnotationMetadata().hasAnnotation(ETag.class);
-        String readTransformer = (isProjection || isETagProperty) ? getDataTransformerReadValue(tableAlias, prop).orElse(null) : null;
+        boolean isETagProperty = propertyPath.getProperty().getAnnotationMetadata().hasAnnotation(ETag.class);
+        String readTransformer = isProjection || isETagProperty ? getDataTransformerReadValue(tableAlias, propertyPath.getProperty()).orElse(null) : null;
         if (readTransformer != null) {
             query.append(readTransformer);
             return;
@@ -1487,7 +1486,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
      */
     @Internal
     protected final class QueryState implements PropertyParameterCreator {
-        private final AbstractSqlLikeQueryBuilder.QueryBuilder queryBuilder;
+        private final QueryBuilder queryBuilder;
         private final String rootAlias;
         private final Map<String, JoinPath> appliedJoinPaths = new LinkedHashMap<>();
         private final boolean allowJoins;
@@ -1496,11 +1495,11 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         private final PersistentEntity entity;
         private List<JoinPath> joinPaths = new ArrayList<>();
 
-        private QueryState(AbstractSqlLikeQueryBuilder.QueryBuilder queryBuilder, BaseQueryDefinition query, boolean allowJoins, boolean useAlias) {
+        private QueryState(QueryBuilder queryBuilder, BaseQueryDefinition query, boolean allowJoins, boolean useAlias) {
             this(queryBuilder, query, allowJoins, useAlias, null);
         }
 
-        private QueryState(AbstractSqlLikeQueryBuilder.QueryBuilder queryBuilder, BaseQueryDefinition query, boolean allowJoins, boolean useAlias, String tableAliasPrefix) {
+        private QueryState(QueryBuilder queryBuilder, BaseQueryDefinition query, boolean allowJoins, boolean useAlias, String tableAliasPrefix) {
             this.queryBuilder = queryBuilder;
             this.allowJoins = allowJoins;
             this.baseQueryDefinition = query;
