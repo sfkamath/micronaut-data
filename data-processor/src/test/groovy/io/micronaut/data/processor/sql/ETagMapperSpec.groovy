@@ -24,7 +24,14 @@ class Book {
     @ETag(function = "SYS_ROW_ETAG", fields = {"id", "title"})
     String etag;
 
+    public void setId(Long id) { this.id = id;}
+    public Long getId() { return id;}
+
+    public void setTitle(String title) {this.title = title;}
+    public String getTitle() { return this.title;}
+
     public String getEtag() { return etag; }
+    public void setEtag(String etag) { this.etag = etag; }
 
     public Book() {}
 }
