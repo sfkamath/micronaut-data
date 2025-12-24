@@ -38,6 +38,7 @@ import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.runtime.convert.AttributeConverter;
 import io.micronaut.data.processor.model.SourcePersistentEntity;
 import io.micronaut.data.processor.model.SourcePersistentProperty;
+import io.micronaut.data.model.PersistentEntityUtils;
 import io.micronaut.data.processor.visitors.finders.TypeUtils;
 import io.micronaut.inject.ast.ClassElement;
 import io.micronaut.inject.ast.PropertyElement;
@@ -46,10 +47,12 @@ import io.micronaut.inject.visitor.TypeElementVisitor;
 import io.micronaut.inject.visitor.VisitorContext;
 
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Function;
 
@@ -362,28 +365,16 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
             throw new ProcessingException(etagProp, "@ETag requires non-empty 'function' value");
         }
 
-        java.util.List<String> parts = new java.util.ArrayList<>();
+        Set<String> parts = new LinkedHashSet<>();
 
-        // include identity if marked
-        SourcePersistentProperty idProp = entity.getIdentity();
-        if (idProp != null && idProp.getAnnotationMetadata().hasAnnotation(ETagPart.class)) {
-            parts.add(idProp.getPersistedName());
-        }
-        // include composite identities if marked
-        SourcePersistentProperty[] compositeIds = entity.getCompositeIdentity();
-        if (compositeIds != null) {
-            for (SourcePersistentProperty cip : compositeIds) {
-                if (cip.getAnnotationMetadata().hasAnnotation(ETagPart.class) && !parts.contains(cip.getPersistedName())) {
-                    parts.add(cip.getPersistedName());
-                }
+        // Traverse all persistent properties (including identity) and collect @ETagPart columns.
+        // This handles embedded paths and association FKs consistently with the rest of the project.
+        PersistentEntityUtils.traversePersistentProperties(entity, true, false, (associations, property) -> {
+            if (property.getAnnotationMetadata().hasAnnotation(ETagPart.class)) {
+                String column = entity.getNamingStrategy().mappedName(associations, property);
+                parts.add(column);
             }
-        }
-        // include regular persistent properties if marked
-        for (SourcePersistentProperty p : properties) {
-            if (p.getAnnotationMetadata().hasAnnotation(ETagPart.class) && !parts.contains(p.getPersistedName())) {
-                parts.add(p.getPersistedName());
-            }
-        }
+        });
 
         if (parts.isEmpty()) {
             return;
@@ -398,7 +389,7 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
         etagPropertyElement.annotate(DataTransformer.class, builder -> builder.member("read", expr));
     }
 
-    private static String buildEtagReadExpression(String function, List<String> parts) {
+    private static String buildEtagReadExpression(String function, Set<String> parts) {
         StringJoiner joiner = new StringJoiner(", ");
         for (String p : parts) {
             joiner.add("@." + p);

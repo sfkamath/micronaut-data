@@ -13,6 +13,17 @@ public record ETagBook(
     @ETagPart
     String title,
 
+    @Relation(Relation.Kind.EMBEDDED)
+    BookDetails bookDetails,
+
     @ETag(function = "SYS_ROW_ETAG")
     String etag) {
+
+    @Embeddable
+    public record BookDetails(
+        @ETagPart
+        int pages,
+        int chapters
+    ) {
+    }
 }

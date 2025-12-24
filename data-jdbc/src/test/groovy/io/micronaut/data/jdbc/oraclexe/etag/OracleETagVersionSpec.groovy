@@ -21,7 +21,7 @@ class OracleETagVersionSpec extends Specification implements OracleTestPropertyP
 
     void "ETag is computed on read and used for optimistic locking"() {
         when: "save a new book"
-        def b = repo.save(new ETagBook(null, "Initial", null))
+        def b = repo.save(new ETagBook(null, "Initial", new ETagBook.BookDetails(200, 10), null))
         def opt = repo.findById(b.id())
         then:
         opt.present
@@ -30,7 +30,7 @@ class OracleETagVersionSpec extends Specification implements OracleTestPropertyP
         when: "optimistic update succeeds with fresh etag"
         def fresh = repo.findById(b.id()).get()
         def etag1 = fresh.etag()
-        fresh = new ETagBook(fresh.id(), "Updated-1", etag1)
+        fresh = new ETagBook(fresh.id(), "Updated-1", fresh.bookDetails(), etag1)
         repo.update(fresh)
         def afterUpdate = repo.findById(b.id()).get()
         def etag2 = afterUpdate.etag()
@@ -39,7 +39,7 @@ class OracleETagVersionSpec extends Specification implements OracleTestPropertyP
         etag2 != etag1
 
         when: "optimistic update fails with stale etag"
-        def stale = new ETagBook(b.id(), "Updated-2", etag1) // use stale etag captured before successful update
+        def stale = new ETagBook(b.id(), "Updated-2", new ETagBook.BookDetails(201, 20), etag1) // use stale etag captured before successful update
         repo.update(stale)
         then:
         def ex = thrown(OptimisticLockException)
