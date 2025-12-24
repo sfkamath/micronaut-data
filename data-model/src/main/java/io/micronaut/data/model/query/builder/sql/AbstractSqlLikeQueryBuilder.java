@@ -168,7 +168,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
      * @param value The literal value
      * @return converter value
      */
-    
+
     protected String asLiteral(@Nullable Object value) {
         if (value instanceof LiteralExpression<?> literalExpression) {
             value = literalExpression.getValue();
@@ -338,7 +338,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
      * @param joinPath The join path
      * @return The alias
      */
-    
+
     protected String getPathOnlyAliasName(JoinPath joinPath) {
         return joinPath.getAlias().orElseGet(() -> {
             var p = new StringBuilder();
@@ -512,7 +512,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
      * @param association    the association
      * @return the mapped name for the association
      */
-    
+
     protected String getMappedName(NamingStrategy namingStrategy,  Association association) {
         return namingStrategy.mappedName(association);
     }
@@ -525,7 +525,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
      * @param property       the property
      * @return the mappen name for the list of associations and property using given naming strategy
      */
-    
+
     protected String getMappedName(NamingStrategy namingStrategy,  List<Association> associations,  PersistentProperty property) {
         return namingStrategy.mappedName(associations, property);
     }
@@ -537,7 +537,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
      * @param propertyPath   the property path
      * @return the mappen name for the list of associations and property using given naming strategy
      */
-    
+
     protected String getMappedName(NamingStrategy namingStrategy,  PersistentPropertyPath propertyPath) {
         return namingStrategy.mappedName(propertyPath.getAssociations(), propertyPath.getProperty());
     }
@@ -1030,7 +1030,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
      * @param queryString The query string
      * @return The delete clause
      */
-    
+
     protected StringBuilder appendDeleteClause(StringBuilder queryString) {
         return queryString.append("DELETE ").append(FROM_CLAUSE);
     }
@@ -1046,7 +1046,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
      * @param tableAlias         The table alias
      * @return The encoded query
      */
-    
+
     public String buildOrderBy(String query,
                                 PersistentEntity entity,
                                 AnnotationMetadata annotationMetadata,
@@ -1339,7 +1339,9 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         }
         QueryPropertyPath propertyPath = queryState.findProperty(pp);
         String tableAlias = propertyPath.getTableAlias();
-        String readTransformer = isProjection ? getDataTransformerReadValue(tableAlias, propertyPath.getProperty()).orElse(null) : null;
+        PersistentProperty prop = propertyPath.getProperty();
+        boolean isVersionProperty = prop == queryState.getEntity().getVersion();
+        String readTransformer = (isProjection || isVersionProperty) ? getDataTransformerReadValue(tableAlias, prop).orElse(null) : null;
         if (readTransformer != null) {
             query.append(readTransformer);
             return;
@@ -1880,7 +1882,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         /**
          * @return The associations
          */
-        
+
         public List<Association> getAssociations() {
             return propertyPath.getAssociations();
         }
@@ -1888,7 +1890,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         /**
          * @return The property
          */
-        
+
         public PersistentProperty getProperty() {
             return propertyPath.getProperty();
         }
@@ -1896,7 +1898,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         /**
          * @return The path
          */
-        
+
         public String getPath() {
             return propertyPath.getPath();
         }
