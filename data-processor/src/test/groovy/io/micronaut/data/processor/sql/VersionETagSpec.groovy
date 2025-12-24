@@ -9,6 +9,7 @@
  */
 package io.micronaut.data.processor.sql
 
+import io.micronaut.data.annotation.sql.ETag
 import io.micronaut.data.model.query.builder.sql.SqlQueryBuilder
 import io.micronaut.data.processor.visitors.AbstractDataSpec
 import io.micronaut.data.runtime.criteria.RuntimeCriteriaBuilder
@@ -38,15 +39,12 @@ class VersionETagSpec extends AbstractDataSpec {
 
 import io.micronaut.data.annotation.MappedEntity
 import io.micronaut.data.annotation.Id
-import io.micronaut.data.annotation.Version
-import io.micronaut.data.annotation.sql.ColumnTransformer
 
 @MappedEntity("book")
 class ETagBook {
     @Id
     Long id
     String title
-    @Version
-    @ColumnTransformer(read = "SYS_ROW_ETAG(@.id, @.title)")
+    @ETag(function = "SYS_ROW_ETAG", fields = ["id", "title"])
     String etag
 }
