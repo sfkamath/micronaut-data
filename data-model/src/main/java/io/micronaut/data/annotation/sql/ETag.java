@@ -30,17 +30,28 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  *     <li>Marks the property as versioned and generated (equivalent to applying
  *     {@code @io.micronaut.data.annotation.Version} and {@code @io.micronaut.data.annotation.GeneratedValue}).</li>
  *     <li>Applies a {@link ColumnTransformer} read expression like
- *     {@code <function>(@.field1, @.field2, ...)} based on {@link #function()} and {@link #fields()}.</li>
+ *     {@code <function>(@.field1, @.field2, ...)} based on {@link #function()} and {@link ETagPart} annotated fields.</li>
  * </ul>
  * <p>
  * Example:
  * <pre>{@code
- * @ETag(function = "SYS_ROW_ETAG", fields = {"id", "title"})
- * private String etag;
+ * {@literal @}MappedEntity
+ * class Book {
+ *   {@literal @}Id
+ *   {@literal @}GeneratedValue
+ *   {@literal @}ETagPart
+ *   Long id;
+ *
+ *   {@literal @}ETagPart
+ *   String title;
+ *
+ *   {@literal @}ETag(function = "SYS_ROW_ETAG")
+ *   String etag;
+ * }
  * }</pre>
  *
  * The actual mapping to {@code @Version}, {@code @GeneratedValue} and {@code @ColumnTransformer} is performed
- * by an annotation mapper in the data-processor module.
+ * by the MappedEntityVisitor in the data-processor module during annotation processing.
  *
  * @author radovanradic
  * @since 5.0
@@ -55,11 +66,4 @@ public @interface ETag {
      * @return function name
      */
     String function();
-
-    /**
-     * The entity field names to include in the function call (e.g. {@code {"id", "title"}}).
-     *
-     * @return Array of field names that participate in the ETag computation
-     */
-    String[] fields();
 }

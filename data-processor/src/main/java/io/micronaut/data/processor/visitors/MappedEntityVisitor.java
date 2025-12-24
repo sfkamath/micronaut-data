@@ -25,8 +25,14 @@ import io.micronaut.data.annotation.MappedEntity;
 import io.micronaut.data.annotation.MappedProperty;
 import io.micronaut.data.annotation.Relation;
 import io.micronaut.data.annotation.TypeDef;
+import io.micronaut.data.annotation.Version;
+import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.sql.JoinColumn;
 import io.micronaut.data.annotation.sql.JoinColumns;
+import io.micronaut.data.annotation.sql.ColumnTransformer;
+import io.micronaut.data.annotation.sql.ETag;
+import io.micronaut.data.annotation.sql.ETagPart;
+import io.micronaut.data.annotation.DataTransformer;
 import io.micronaut.data.model.DataType;
 import io.micronaut.data.model.PersistentProperty;
 import io.micronaut.data.model.runtime.convert.AttributeConverter;
@@ -44,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.function.Function;
 
 import static io.micronaut.data.processor.visitors.Utils.getConfiguredDataConverters;
@@ -119,6 +126,18 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
            element.annotate(Indexes.class, builder -> builder.values(indexes.toArray(new AnnotationValue[]{})));
         }
 
+        // Pre-annotate @Version and @GeneratedValue on the @ETag property early,
+        // so entity model can recognize the version property during this visit.
+        SourcePersistentProperty etagEarly = properties.stream()
+            .filter(p -> p.getAnnotationMetadata().hasAnnotation(ETag.class))
+            .findFirst()
+            .orElse(null);
+        if (etagEarly != null) {
+            PropertyElement etagEl = etagEarly.getPropertyElement();
+            etagEl.annotate(Version.class, b -> { });
+            etagEl.annotate(GeneratedValue.class, b -> { });
+        }
+
         for (PersistentProperty property : properties) {
             computeMappingDefaults(property, dataTypes, dataConverters, context);
         }
@@ -139,6 +158,9 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
         if (version != null) {
             computeMappingDefaults(version, dataTypes, dataConverters, context);
         }
+
+        // Synthesize ColumnTransformer(read=...) for @ETag on version from @ETagPart fields
+        synthesizeETagColumnTransformer(entity, properties, context);
     }
 
     private void computeMappingDefaults(
@@ -321,5 +343,66 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
         } else if (!serdeConfigPropertyIdName.equals(JSON_VIEW_ID)) {
             throw new ProcessingException(identity, "@JsonView identity @SerdeConfig property cannot be set to value different than '" + JSON_VIEW_ID + "'");
         }
+    }
+
+    private void synthesizeETagColumnTransformer(SourcePersistentEntity entity,
+                                                 List<SourcePersistentProperty> properties,
+                                                 VisitorContext context) {
+        // Find the property annotated with @ETag (the ETag holder)
+        SourcePersistentProperty etagProp = properties.stream()
+            .filter(p -> p.getAnnotationMetadata().hasAnnotation(ETag.class))
+            .findFirst()
+            .orElse(null);
+        if (etagProp == null) {
+            return;
+        }
+        AnnotationMetadata etagMetadata = etagProp.getAnnotationMetadata();
+        String function = etagMetadata.stringValue(ETag.class, "function").orElse(null);
+        if (function == null || function.isEmpty()) {
+            throw new ProcessingException(etagProp, "@ETag requires non-empty 'function' value");
+        }
+
+        java.util.List<String> parts = new java.util.ArrayList<>();
+
+        // include identity if marked
+        SourcePersistentProperty idProp = entity.getIdentity();
+        if (idProp != null && idProp.getAnnotationMetadata().hasAnnotation(ETagPart.class)) {
+            parts.add(idProp.getPersistedName());
+        }
+        // include composite identities if marked
+        SourcePersistentProperty[] compositeIds = entity.getCompositeIdentity();
+        if (compositeIds != null) {
+            for (SourcePersistentProperty cip : compositeIds) {
+                if (cip.getAnnotationMetadata().hasAnnotation(ETagPart.class) && !parts.contains(cip.getPersistedName())) {
+                    parts.add(cip.getPersistedName());
+                }
+            }
+        }
+        // include regular persistent properties if marked
+        for (SourcePersistentProperty p : properties) {
+            if (p.getAnnotationMetadata().hasAnnotation(ETagPart.class) && !parts.contains(p.getPersistedName())) {
+                parts.add(p.getPersistedName());
+            }
+        }
+
+        if (parts.isEmpty()) {
+            return;
+        }
+        // Ensure @Version and @GeneratedValue are present on the ETag property
+        PropertyElement etagPropertyElement = etagProp.getPropertyElement();
+        etagPropertyElement.annotate(Version.class, b -> { });
+        etagPropertyElement.annotate(GeneratedValue.class, b -> { });
+        String expr = buildEtagReadExpression(function, parts);
+        // Apply both ColumnTransformer and aliased DataTransformer for downstream consumers/tests
+        etagPropertyElement.annotate(ColumnTransformer.class, builder -> builder.member("read", expr));
+        etagPropertyElement.annotate(DataTransformer.class, builder -> builder.member("read", expr));
+    }
+
+    private static String buildEtagReadExpression(String function, List<String> parts) {
+        StringJoiner joiner = new StringJoiner(", ");
+        for (String p : parts) {
+            joiner.add("@." + p);
+        }
+        return function + "(" + joiner + ")";
     }
 }

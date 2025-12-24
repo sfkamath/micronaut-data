@@ -9,7 +9,12 @@
  */
 package io.micronaut.data.processor.sql
 
+import io.micronaut.data.annotation.GeneratedValue
+import io.micronaut.data.annotation.Version
+import io.micronaut.data.annotation.sql.ColumnTransformer
 import io.micronaut.data.annotation.sql.ETag
+import io.micronaut.data.annotation.sql.ETagPart
+import io.micronaut.data.model.PersistentEntity
 import io.micronaut.data.model.query.builder.sql.SqlQueryBuilder
 import io.micronaut.data.processor.visitors.AbstractDataSpec
 import io.micronaut.data.runtime.criteria.RuntimeCriteriaBuilder
@@ -29,11 +34,18 @@ class VersionETagSpec extends AbstractDataSpec {
                 .where(builder.equal(root.get("etag"), builder.parameter(String)))
                 .build(queryBuilder)
                 .query
+        def entity = PersistentEntity.of(ETagBook)
+        def etag = entity.getPropertyByName("etag")
 
         then:
         // Expect the WHERE left-hand side to use the read transformer and alias replacement:
         // Note: UPDATE uses no table alias by default, so @. resolves to empty prefix -> properties without alias
         sql == 'UPDATE "book" SET "title"=? WHERE (SYS_ROW_ETAG(id, title) = ?)'
+
+        etag
+        etag.annotationMetadata.hasAnnotation(Version)
+        etag.annotationMetadata.hasAnnotation(GeneratedValue)
+        etag.annotationMetadata.stringValue(ColumnTransformer, "read").get() == 'SYS_ROW_ETAG(@.id, @.title)'
     }
 }
 
@@ -42,9 +54,11 @@ import io.micronaut.data.annotation.Id
 
 @MappedEntity("book")
 class ETagBook {
+    @ETagPart
     @Id
     Long id
+    @ETagPart
     String title
-    @ETag(function = "SYS_ROW_ETAG", fields = ["id", "title"])
+    @ETag(function = "SYS_ROW_ETAG")
     String etag
 }
