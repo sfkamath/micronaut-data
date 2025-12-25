@@ -416,6 +416,7 @@ public interface TransactionDefinition {
 
     /**
      * Returns the transaction priority hint for Oracle databases.
+     * For other databases it will be ignored.
      * <p>
      * The returned {@link TransactionPriority} instance is used to set the session-level
      * transaction priority for the duration of the transaction. This is only effective

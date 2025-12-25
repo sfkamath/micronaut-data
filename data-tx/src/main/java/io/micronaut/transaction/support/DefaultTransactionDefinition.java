@@ -270,6 +270,7 @@ public class DefaultTransactionDefinition implements TransactionDefinition {
 
     /**
      * Sets the Oracle transaction priority for this transaction definition.
+     * For other databases it will be ignored.
      * <p>
      * When effective (Oracle Database 26ai+ with system wait targets configured),
      * a session-level transaction priority will be set for the duration of the transaction.

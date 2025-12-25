@@ -139,10 +139,10 @@ public final class DataSourceTransactionManager extends AbstractDefaultTransacti
 
         // Apply Oracle transaction priority if requested via @TransactionPriority (Oracle Database 26ai+)
         try {
-            String productName = connection.getMetaData().getDatabaseProductName();
-            if ("Oracle".equalsIgnoreCase(productName)) {
-                TransactionPriority.Level priority = definition.getPriority();
-                if (priority != null) {
+            TransactionPriority.Level priority = definition.getPriority();
+            if (priority != null) {
+                String productName = connection.getMetaData().getDatabaseProductName();
+                if ("Oracle".equalsIgnoreCase(productName)) {
                     applyOracleTxnPriority(logger, connection, priority);
                     // Reset to HIGH after execution to avoid leaking priority across pooled sessions
                     onComplete.add(() -> resetOracleTxnPriority(logger, connection));
@@ -293,7 +293,7 @@ public final class DataSourceTransactionManager extends AbstractDefaultTransacti
      * Reset Oracle session transaction priority to HIGH.
      * No-op on failure (logged at DEBUG).
      */
-    private static void resetOracleTxnPriority(org.slf4j.Logger logger, Connection connection) {
+    private static void resetOracleTxnPriority(Logger logger, Connection connection) {
         String sql = "ALTER SESSION SET \"txn_priority\"=\"HIGH\"";
         try (Statement stmt = connection.createStatement()) {
             if (logger.isDebugEnabled()) {
