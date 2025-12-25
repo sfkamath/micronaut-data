@@ -130,18 +130,6 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
            element.annotate(Indexes.class, builder -> builder.values(indexes.toArray(new AnnotationValue[]{})));
         }
 
-        // Pre-annotate @Version and @GeneratedValue on the @ETag property early,
-        // so entity model can recognize the version property during this visit.
-        SourcePersistentProperty etagEarly = properties.stream()
-            .filter(p -> p.getAnnotationMetadata().hasAnnotation(ETagValueBased.class))
-            .findFirst()
-            .orElse(null);
-        if (etagEarly != null) {
-            PropertyElement etagEl = etagEarly.getPropertyElement();
-            etagEl.annotate(Version.class, b -> { });
-            etagEl.annotate(GeneratedValue.class, b -> { });
-        }
-
         for (PersistentProperty property : properties) {
             computeMappingDefaults(property, dataTypes, dataConverters, context);
         }
