@@ -1,9 +1,6 @@
 package io.micronaut.transaction.jdbc
 
-import io.micronaut.core.annotation.AnnotationMetadata
-import io.micronaut.core.annotation.AnnotationValue
 import io.micronaut.data.connection.ConnectionDefinition
-import io.micronaut.data.connection.ConnectionSynchronization
 import io.micronaut.data.connection.annotation.TransactionPriority
 import io.micronaut.data.connection.support.DefaultConnectionStatus
 import io.micronaut.data.connection.DefaultConnectionDefinition
@@ -14,7 +11,6 @@ import spock.lang.Specification
 import javax.sql.DataSource
 import java.sql.Connection
 import java.sql.DatabaseMetaData
-import java.sql.Savepoint
 import java.sql.Statement
 
 /**
@@ -30,22 +26,14 @@ class OracleTransactionPrioritySpec extends Specification {
         def meta = Mock(DatabaseMetaData)
         def stmt = Mock(Statement)
 
-        and: "Annotation metadata carrying @TransactionPriority(LOW)"
-        def annotationMetadata = Mock(AnnotationMetadata)
-        def annValue = AnnotationValue.builder(TransactionPriority)
-                .value(TransactionPriority.Level.LOW)
-                .build()
-        annotationMetadata.getAnnotation(TransactionPriority) >> annValue
-
         and: "Connection definition carrying that annotation metadata"
         ConnectionDefinition connDef = new DefaultConnectionDefinition("test")
-                .withAnnotationMetadata(annotationMetadata)
 
         and: "Connection status wrapping the connection and allowing synchronizations"
         def status = new DefaultConnectionStatus<>(connection, connDef, true, null)
 
         and: "A DefaultTransactionStatus with the above connection status"
-        def txDef = TransactionDefinition.DEFAULT
+        def txDef = createWithPriority(TransactionPriority.Level.LOW)
         def txManager = new DataSourceTransactionManager(dataSource, Mock(io.micronaut.data.connection.ConnectionOperations), Mock(io.micronaut.data.connection.SynchronousConnectionManager))
 
         def txStatus = DefaultTransactionStatus.newTx(status, txDef, txManager)
@@ -84,17 +72,11 @@ class OracleTransactionPrioritySpec extends Specification {
         def connection = Mock(Connection)
         def meta = Mock(DatabaseMetaData)
 
-        def annotationMetadata = Mock(AnnotationMetadata)
-        def annValue = AnnotationValue.builder(TransactionPriority)
-                .value(TransactionPriority.Level.HIGH)
-                .build()
-        annotationMetadata.getAnnotation(TransactionPriority) >> annValue
 
         ConnectionDefinition connDef = new DefaultConnectionDefinition("test")
-                .withAnnotationMetadata(annotationMetadata)
 
         def status = new DefaultConnectionStatus<>(connection, connDef, true, null)
-        def txDef = TransactionDefinition.DEFAULT
+        def txDef = createWithPriority(TransactionPriority.Level.HIGH)
         def txManager = new DataSourceTransactionManager(dataSource, Mock(io.micronaut.data.connection.ConnectionOperations), Mock(io.micronaut.data.connection.SynchronousConnectionManager))
         def txStatus = DefaultTransactionStatus.newTx(status, txDef, txManager)
 
@@ -114,5 +96,20 @@ class OracleTransactionPrioritySpec extends Specification {
 
         then: "No ALTER SESSION is executed"
         0 * connection.createStatement()
+    }
+
+    static TransactionDefinition createWithPriority(TransactionPriority.Level priority) {
+        return new TransactionDefinition() {
+
+            @Override
+            public String getName() {
+                return "DEFAULT";
+            }
+
+            @Override
+            TransactionPriority.Level getPriority() {
+                return priority
+            }
+        }
     }
 }

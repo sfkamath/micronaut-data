@@ -161,7 +161,7 @@ public final class ConnectableInterceptor implements MethodInterceptor<Object, O
             annotation.enumValue("propagation", ConnectionDefinition.Propagation.class).orElse(ConnectionDefinition.PROPAGATION_DEFAULT),
             annotation.longValue("timeout").stream().mapToObj(Duration::ofSeconds).findFirst().orElse(null),
             annotation.booleanValue("readOnly").orElse(null)
-        ).withAnnotationMetadata(executableMethod.getAnnotationMetadata());
+        );
     }
 
     /**

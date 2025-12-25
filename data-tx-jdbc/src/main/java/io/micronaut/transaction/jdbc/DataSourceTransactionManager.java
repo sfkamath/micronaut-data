@@ -27,14 +27,13 @@ import io.micronaut.data.connection.ConnectionSynchronization;
 import io.micronaut.data.connection.SynchronousConnectionManager;
 import io.micronaut.data.connection.jdbc.advice.DelegatingDataSource;
 import io.micronaut.data.connection.support.JdbcConnectionUtils;
-import io.micronaut.core.annotation.AnnotationMetadata;
-import io.micronaut.core.annotation.AnnotationValue;
 import io.micronaut.data.connection.annotation.TransactionPriority;
 import io.micronaut.transaction.TransactionDefinition;
 import io.micronaut.transaction.exceptions.CannotCreateTransactionException;
 import io.micronaut.transaction.exceptions.TransactionSystemException;
 import io.micronaut.transaction.impl.DefaultTransactionStatus;
 import io.micronaut.transaction.support.AbstractDefaultTransactionOperations;
+import org.slf4j.Logger;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -142,12 +141,9 @@ public final class DataSourceTransactionManager extends AbstractDefaultTransacti
         try {
             String productName = connection.getMetaData().getDatabaseProductName();
             if ("Oracle".equalsIgnoreCase(productName)) {
-                AnnotationMetadata annotationMetadata = status.getConnectionStatus().getDefinition().getAnnotationMetadata();
-                AnnotationValue<TransactionPriority> txPriority = annotationMetadata.getAnnotation(TransactionPriority.class);
-                if (txPriority != null) {
-                    TransactionPriority.Level level = txPriority.enumValue("value", TransactionPriority.Level.class)
-                        .orElse(TransactionPriority.Level.HIGH);
-                    applyOracleTxnPriority(logger, connection, level);
+                TransactionPriority.Level priority = definition.getPriority();
+                if (priority != null) {
+                    applyOracleTxnPriority(logger, connection, priority);
                     // Reset to HIGH after execution to avoid leaking priority across pooled sessions
                     onComplete.add(() -> resetOracleTxnPriority(logger, connection));
                 }
@@ -279,7 +275,7 @@ public final class DataSourceTransactionManager extends AbstractDefaultTransacti
      * Apply Oracle session transaction priority using ALTER SESSION.
      * No-op on failure (logged at DEBUG).
      */
-    private static void applyOracleTxnPriority(org.slf4j.Logger logger, Connection connection, TransactionPriority.Level level) {
+    private static void applyOracleTxnPriority(Logger logger, Connection connection, TransactionPriority.Level level) {
         String sql = "ALTER SESSION SET \"txn_priority\"=\"" + level.name() + "\"";
         try (Statement stmt = connection.createStatement()) {
             if (logger.isDebugEnabled()) {
