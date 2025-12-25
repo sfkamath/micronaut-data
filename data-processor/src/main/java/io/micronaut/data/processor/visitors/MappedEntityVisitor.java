@@ -18,6 +18,7 @@ package io.micronaut.data.processor.visitors;
 import io.micronaut.core.annotation.AnnotationClassValue;
 import io.micronaut.core.annotation.AnnotationMetadata;
 import io.micronaut.core.annotation.AnnotationValue;
+import io.micronaut.core.util.CollectionUtils;
 import org.jspecify.annotations.NonNull;
 import io.micronaut.data.annotation.Index;
 import io.micronaut.data.annotation.Indexes;
@@ -30,8 +31,8 @@ import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.sql.JoinColumn;
 import io.micronaut.data.annotation.sql.JoinColumns;
 import io.micronaut.data.annotation.sql.ColumnTransformer;
-import io.micronaut.data.annotation.sql.ETag;
-import io.micronaut.data.annotation.sql.ETagPart;
+import io.micronaut.data.annotation.sql.ETagValueBased;
+import io.micronaut.data.annotation.sql.ETagValue;
 import io.micronaut.data.annotation.DataTransformer;
 import io.micronaut.data.model.DataType;
 import io.micronaut.data.model.PersistentProperty;
@@ -132,7 +133,7 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
         // Pre-annotate @Version and @GeneratedValue on the @ETag property early,
         // so entity model can recognize the version property during this visit.
         SourcePersistentProperty etagEarly = properties.stream()
-            .filter(p -> p.getAnnotationMetadata().hasAnnotation(ETag.class))
+            .filter(p -> p.getAnnotationMetadata().hasAnnotation(ETagValueBased.class))
             .findFirst()
             .orElse(null);
         if (etagEarly != null) {
@@ -162,8 +163,8 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
             computeMappingDefaults(version, dataTypes, dataConverters, context);
         }
 
-        // Synthesize ColumnTransformer(read=...) for @ETag on version from @ETagPart fields
-        synthesizeETagColumnTransformer(entity, properties, context);
+        // Synthesize ColumnTransformer(read=...) for @ETagValueBased on version from @ETagValue fields
+        synthesizeETagColumnTransformer(entity, properties);
     }
 
     private void computeMappingDefaults(
@@ -349,35 +350,41 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
     }
 
     private void synthesizeETagColumnTransformer(SourcePersistentEntity entity,
-                                                 List<SourcePersistentProperty> properties,
-                                                 VisitorContext context) {
-        // Find the property annotated with @ETag (the ETag holder)
-        SourcePersistentProperty etagProp = properties.stream()
-            .filter(p -> p.getAnnotationMetadata().hasAnnotation(ETag.class))
-            .findFirst()
-            .orElse(null);
-        if (etagProp == null) {
+                                                 List<SourcePersistentProperty> properties) {
+        // Find the property annotated with @ETagValueBased (the ETag holder)
+        List<SourcePersistentProperty> etagPropList = properties.stream()
+            .filter(p -> p.getAnnotationMetadata().hasAnnotation(ETagValueBased.class))
+            .toList();
+        if (CollectionUtils.isEmpty(etagPropList)) {
             return;
         }
+        if (etagPropList.size() > 1) {
+            throw new ProcessingException(etagPropList.get(1), "Only one field can be marked as @ETagValueBased");
+        }
+        SourcePersistentProperty etagProp = etagPropList.get(0);
+        if (entity.getVersion() != null) {
+            throw new ProcessingException(etagProp, "Entity with @Version field cannot have @ETagValueBased field");
+        }
+
         AnnotationMetadata etagMetadata = etagProp.getAnnotationMetadata();
-        String function = etagMetadata.stringValue(ETag.class, "function").orElse(null);
+        String function = etagMetadata.stringValue(ETagValueBased.class, "function").orElse(null);
         if (function == null || function.isEmpty()) {
-            throw new ProcessingException(etagProp, "@ETag requires non-empty 'function' value");
+            throw new ProcessingException(etagProp, "@ETagValueBased requires non-empty 'function' value");
         }
 
         Set<String> parts = new LinkedHashSet<>();
 
-        // Traverse all persistent properties (including identity) and collect @ETagPart columns.
+        // Traverse all persistent properties (including identity) and collect @ETagValue columns.
         // This handles embedded paths and association FKs consistently with the rest of the project.
         PersistentEntityUtils.traversePersistentProperties(entity, true, false, (associations, property) -> {
-            if (property.getAnnotationMetadata().hasAnnotation(ETagPart.class)) {
+            if (property.getAnnotationMetadata().hasAnnotation(ETagValue.class)) {
                 String column = entity.getNamingStrategy().mappedName(associations, property);
                 parts.add(column);
             }
         });
 
         if (parts.isEmpty()) {
-            return;
+            throw new ProcessingException(etagProp, "@ETagValueBased requires at least one @ETagValue annotated field");
         }
         // Ensure @Version and @GeneratedValue are present on the ETag property
         PropertyElement etagPropertyElement = etagProp.getPropertyElement();

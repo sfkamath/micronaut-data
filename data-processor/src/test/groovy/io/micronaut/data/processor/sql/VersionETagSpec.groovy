@@ -12,10 +12,11 @@ package io.micronaut.data.processor.sql
 import io.micronaut.data.annotation.GeneratedValue
 import io.micronaut.data.annotation.Version
 import io.micronaut.data.annotation.sql.ColumnTransformer
-import io.micronaut.data.annotation.sql.ETag
-import io.micronaut.data.annotation.sql.ETagPart
+import io.micronaut.data.annotation.sql.ETagValueBased
+import io.micronaut.data.annotation.sql.ETagValue
 import io.micronaut.data.model.PersistentEntity
 import io.micronaut.data.model.query.builder.sql.SqlQueryBuilder
+import io.micronaut.data.processor.model.SourcePersistentEntity
 import io.micronaut.data.processor.visitors.AbstractDataSpec
 import io.micronaut.data.runtime.criteria.RuntimeCriteriaBuilder
 
@@ -47,6 +48,40 @@ class VersionETagSpec extends AbstractDataSpec {
         etag.annotationMetadata.hasAnnotation(GeneratedValue)
         etag.annotationMetadata.stringValue(ColumnTransformer, "read").get() == 'SYS_ROW_ETAG(@.id, @.title)'
     }
+
+    void "test @ETagValueBased with @Version field in the entity"() {
+        when:
+        buildEntity('test.MyEntity', '''
+import io.micronaut.data.annotation.MappedProperty;
+import io.micronaut.data.annotation.sql.ETagValueBased;
+
+@MappedEntity
+record MyEntity(@Id @GeneratedValue Long id,
+    String name,
+    @Version Long version,
+    @ETagValueBased(function = "custom") String eTag) {}
+''')
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("Entity with @Version field cannot have @ETagValueBased field")
+    }
+
+    void "test @ETagValueBased without @ETagValue fields in the entity"() {
+        when:
+        buildEntity('test.MyEntity', '''
+import io.micronaut.data.annotation.MappedProperty;
+import io.micronaut.data.annotation.sql.ETagValueBased;
+
+@MappedEntity
+record MyEntity(@Id @GeneratedValue Long id,
+    String name,
+    Long version,
+    @ETagValueBased(function = "custom") String eTag) {}
+''')
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("@ETagValueBased requires at least one @ETagValue annotated field")
+    }
 }
 
 import io.micronaut.data.annotation.MappedEntity
@@ -54,11 +89,11 @@ import io.micronaut.data.annotation.Id
 
 @MappedEntity("book")
 class ETagBook {
-    @ETagPart
+    @ETagValue
     @Id
     Long id
-    @ETagPart
+    @ETagValue
     String title
-    @ETag(function = "SYS_ROW_ETAG")
+    @ETagValueBased(function = "SYS_ROW_ETAG")
     String etag
 }

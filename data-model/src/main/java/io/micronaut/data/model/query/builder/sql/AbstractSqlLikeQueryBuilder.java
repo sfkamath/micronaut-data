@@ -18,7 +18,7 @@ package io.micronaut.data.model.query.builder.sql;
 import io.micronaut.core.annotation.AnnotationMetadata;
 import io.micronaut.core.annotation.AnnotationValue;
 import io.micronaut.core.annotation.Internal;
-import io.micronaut.data.annotation.sql.ETag;
+import io.micronaut.data.annotation.sql.ETagValueBased;
 import org.jspecify.annotations.Nullable;
 import io.micronaut.core.util.ArgumentUtils;
 import io.micronaut.core.util.ArrayUtils;
@@ -1340,7 +1340,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         }
         QueryPropertyPath propertyPath = queryState.findProperty(pp);
         String tableAlias = propertyPath.getTableAlias();
-        boolean isETagProperty = propertyPath.getProperty().getAnnotationMetadata().hasAnnotation(ETag.class);
+        boolean isETagProperty = propertyPath.getProperty().getAnnotationMetadata().hasAnnotation(ETagValueBased.class);
         String readTransformer = isProjection || isETagProperty ? getDataTransformerReadValue(tableAlias, propertyPath.getProperty()).orElse(null) : null;
         if (readTransformer != null) {
             query.append(readTransformer);

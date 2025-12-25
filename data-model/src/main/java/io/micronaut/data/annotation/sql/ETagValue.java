@@ -24,21 +24,22 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
  * Marker annotation to indicate that the annotated mapped property participates
- * in the computation of an entity {@link ETag}.
+ * in the computation of an entity {@link ETagValueBased}.
  * <p>
- * Fields or properties annotated with {@code @ETagPart} will be gathered by the
+ * Fields or properties annotated with {@code @ETagValue} will be gathered by the
  * annotation processing step to build the read expression of a {@link ColumnTransformer}
- * on the property annotated with {@link ETag}.
+ * on the property annotated with {@link ETagValueBased}.
  * <p>
  * The processor resolves the persisted/column names of the marked properties, so
  * fields within embedded types are handled according to the configured naming strategy.
  *
- * <p>Usage: mark properties participating in the ETag with {@literal @}ETagPart, and annotate the target ETag
- * property with {@link ETag}. The processor derives the SQL read expression accordingly.</p>
+ * <p>Usage: mark properties participating in the ETag with {@literal @}ETagValue, and annotate the target ETag
+ * property with {@link ETagValueBased}. The processor derives the SQL read expression accordingly.</p>
  *
+ * @author radovanradic
  * @since 5.0
  */
 @Target({FIELD, METHOD})
 @Retention(RUNTIME)
-public @interface ETagPart {
+public @interface ETagValue {
 }

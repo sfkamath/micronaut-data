@@ -30,7 +30,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  *     <li>Marks the property as versioned and generated (equivalent to applying
  *     {@code @io.micronaut.data.annotation.Version} and {@code @io.micronaut.data.annotation.GeneratedValue}).</li>
  *     <li>Applies a {@link ColumnTransformer} read expression like
- *     {@code <function>(@.field1, @.field2, ...)} based on {@link #function()} and {@link ETagPart} annotated fields.</li>
+ *     {@code <function>(@.field1, @.field2, ...)} based on {@link #function()} and {@link ETagValue} annotated fields.</li>
  * </ul>
  * <p>
  * Example:
@@ -39,13 +39,13 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  * class Book {
  *   {@literal @}Id
  *   {@literal @}GeneratedValue
- *   {@literal @}ETagPart
+ *   {@literal @}ETagValue
  *   Long id;
  *
- *   {@literal @}ETagPart
+ *   {@literal @}ETagValue
  *   String title;
  *
- *   {@literal @}ETag(function = "SYS_ROW_ETAG")
+ *   {@literal @}ETagValueBased(function = "SYS_ROW_ETAG")
  *   String etag;
  * }
  * }</pre>
@@ -58,10 +58,11 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  */
 @Target({FIELD, METHOD})
 @Retention(RUNTIME)
-public @interface ETag {
+public @interface ETagValueBased {
 
     /**
-     * The SQL function name to compute the ETag (e.g. {@code SYS_ROW_ETAG}).
+     * The SQL function name to compute the ETag (e.g. {@code SYS_ROW_ETAG}) using values
+     * annotated by {@link ETagValue}.
      *
      * @return function name
      */
