@@ -32,9 +32,16 @@ import io.micronaut.transaction.async.AsyncTransactionOperations;
 import io.micronaut.transaction.reactive.ReactiveTransactionOperations;
 import io.micronaut.transaction.reactive.ReactorReactiveTransactionOperations;
 import io.micronaut.transaction.support.TransactionUtil;
+import io.micronaut.transaction.annotation.Recoverable;
+import io.micronaut.transaction.recovery.CommitOutcome;
+import io.micronaut.transaction.recovery.CommitOutcomeResolver;
+import io.micronaut.context.BeanLocator;
+import io.micronaut.inject.qualifiers.Qualifiers;
 import jakarta.inject.Singleton;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 import java.util.Map;
 import java.util.Objects;
@@ -60,18 +67,24 @@ public final class TransactionalInterceptor implements MethodInterceptor<Object,
 
     private final ConversionService conversionService;
 
+    private final BeanLocator beanLocator;
+
     /**
      * Default constructor.
      *
      * @param transactionOperationsRegistry The {@link TransactionOperationsRegistry}
      * @param tenantResolver                The {@link TransactionDataSourceTenantResolver}
      * @param conversionService             The conversion service
+     * @param beanLocator                   The bean locator
      */
     public TransactionalInterceptor(@NonNull TransactionOperationsRegistry transactionOperationsRegistry,
-                                    @Nullable TransactionDataSourceTenantResolver tenantResolver, ConversionService conversionService) {
+                                    @Nullable TransactionDataSourceTenantResolver tenantResolver,
+                                    ConversionService conversionService,
+                                    BeanLocator beanLocator) {
         this.transactionOperationsRegistry = transactionOperationsRegistry;
         this.tenantResolver = tenantResolver;
         this.conversionService = conversionService;
+        this.beanLocator = beanLocator;
     }
 
     @Override
@@ -137,6 +150,81 @@ public final class TransactionalInterceptor implements MethodInterceptor<Object,
                 }
                 case SYNCHRONOUS -> {
                     TransactionOperations<?> transactionManager = Objects.requireNonNull(transactionInvocation.transactionManager);
+
+                    // Recoverable handling (synchronous only)
+                    if (context.getAnnotationMetadata().hasAnnotation(Recoverable.class)) {
+                        // Resolve data source name for resolver lookup (same logic as TM resolution)
+                        final String dataSource = tenantDataSourceName == null ? context.getExecutableMethod().stringValue(Transactional.class).orElse(null) : tenantDataSourceName;
+
+                        final CommitOutcomeResolver resolver = findOutcomeResolver(dataSource);
+                        if (resolver != null) {
+                            // Read annotation attributes
+                            Class<?>[] on = context.classValues(Recoverable.class, "on");
+                            if (on == null || on.length == 0) {
+                                on = new Class[]{java.sql.SQLRecoverableException.class};
+                            }
+                            final int maxAttempts = context.intValue(Recoverable.class, "maxAttempts").orElse(1);
+                            final long backoff = context.longValue(Recoverable.class, "backoff").orElse(100L);
+                            final Recoverable.OutcomePolicy unknownPolicy =
+                                context.enumValue(Recoverable.class, "unknownOutcomePolicy", Recoverable.OutcomePolicy.class)
+                                    .orElse(Recoverable.OutcomePolicy.RETRY);
+
+                            int attempts = 0;
+                            while (true) {
+                                final AtomicReference<Object> ltxidRef = new AtomicReference<>();
+                                final AtomicReference<Object> resultRef = new AtomicReference<>();
+                                try {
+                                    return transactionManager.execute(definition, status -> {
+                                        // Capture LTXID/token right before commit
+                                        status.registerSynchronization(new io.micronaut.transaction.support.TransactionSynchronization() {
+                                            @Override
+                                            public void beforeCompletion() {
+                                                Object token = resolver.captureLtxid(status);
+                                                if (token != null) {
+                                                    ltxidRef.set(token);
+                                                }
+                                            }
+                                        });
+                                        Object r = context.proceed();
+                                        resultRef.set(r);
+                                        return r;
+                                    });
+                                } catch (Throwable t) {
+                                    if (!matchesRecoverable(t, on)) {
+                                        throw t;
+                                    }
+                                    CommitOutcome outcome = CommitOutcome.UNKNOWN;
+                                    Object token = ltxidRef.get();
+                                    if (token != null) {
+                                        try {
+                                            outcome = resolver.resolve(token);
+                                        } catch (Throwable ignore) {
+                                            // leave UNKNOWN
+                                        }
+                                    }
+                                    if (outcome == CommitOutcome.COMMITTED) {
+                                        return resultRef.get();
+                                    }
+                                    boolean retry = outcome == CommitOutcome.NOT_COMMITTED ||
+                                        (outcome == CommitOutcome.UNKNOWN && unknownPolicy == Recoverable.OutcomePolicy.RETRY);
+                                    if (retry && attempts++ < maxAttempts) {
+                                        if (backoff > 0) {
+                                            try {
+                                                Thread.sleep(backoff);
+                                            } catch (InterruptedException ie) {
+                                                Thread.currentThread().interrupt();
+                                            }
+                                        }
+                                        // retry new TX
+                                        continue;
+                                    }
+                                    throw t;
+                                }
+                            }
+                        }
+                    }
+
+                    // Default synchronous transactional execution
                     return transactionManager.execute(definition, status -> context.proceed());
                 }
                 default -> {
@@ -160,6 +248,31 @@ public final class TransactionalInterceptor implements MethodInterceptor<Object,
             throw new IllegalStateException("No declared @Transactional annotation present");
         }
         return definition;
+    }
+
+    @Nullable
+    private CommitOutcomeResolver findOutcomeResolver(@Nullable String dataSourceName) {
+        try {
+            if (dataSourceName == null) {
+                return beanLocator.findBean(CommitOutcomeResolver.class).orElse(null);
+            }
+            return beanLocator.findBean(CommitOutcomeResolver.class, Qualifiers.byName(dataSourceName)).orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean matchesRecoverable(Throwable t, Class<?>[] types) {
+        Throwable cur = t;
+        while (cur != null) {
+            for (Class<?> c : types) {
+                if (c.isInstance(cur)) {
+                    return true;
+                }
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 
     /**

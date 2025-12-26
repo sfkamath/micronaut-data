@@ -1,0 +1,78 @@
+= Recoverable Transactions (Oracle Transaction Guard)
+
+Micronaut Data provides a method-level annotation `@Recoverable` to deterministically resolve ambiguous commit outcomes by consulting the database’s commit outcome facility. The initial implementation targets Oracle Transaction Guard (TG).
+
+When a failure happens after a COMMIT is issued but before the client receives the acknowledgement, the application cannot tell whether the transaction committed. With TG, the commit outcome can be queried later by Logical Transaction ID (LTXID). `@Recoverable` integrates with Micronaut’s transaction management to:
+
+- Capture the transaction’s LTXID just before commit
+- On `SQLRecoverableException` (or configured types), query TG for the outcome
+- If TG reports COMMITTED, return the original business result and suppress the exception
+- If TG reports NOT_COMMITTED (or UNKNOWN per policy), transparently retry the method up to a configured number of attempts
+
+NOTE: The initial scope is synchronous (JDBC) transactions. Reactive and async support may be provided later.
+
+== Prerequisites
+
+- Oracle Database 12c+ configured for Transaction Guard and commit outcome
+- Client connected to an Oracle service configured for commit outcome (common in Application Continuity setups)
+- For the TG resolver to be activated, set the datasource dialect to Oracle and enable the TG integration
+
+== Configuration
+
+Enable Oracle Transaction Guard integration for the target datasource:
+
+[source,yaml]
+----
+datasources:
+  default:
+    dialect: ORACLE
+    enable-oracle-transaction-guard: true
+----
+
+With the above, Micronaut Data will register an Oracle-specific Commit Outcome Resolver for that datasource. It uses:
+
+- LTXID capture: select sys_context('USERENV','LTXID') from dual
+- Outcome resolution: select sys.dbms_app_cont.get_ltxid_outcome(hextoraw(?)) from dual
+
+== Usage
+
+Annotate transactional methods that should apply TG-based recovery:
+
+[source,java]
+----
+import io.micronaut.transaction.annotation.Recoverable;
+import io.micronaut.transaction.annotation.Transactional;
+import jakarta.inject.Singleton;
+
+@Singleton
+class OrderService {
+
+    @Transactional
+    @Recoverable(maxAttempts = 1, unknownOutcomePolicy = Recoverable.OutcomePolicy.RETRY)
+    Long placeOrder(Order o) {
+        // idempotent logic or unique constraints to prevent duplicates
+        // DAO/repository calls
+        return /* persisted id */;
+    }
+}
+----
+
+`@Recoverable` attributes:
+
+- on: exception types that trigger recovery (default: java.sql.SQLRecoverableException)
+- maxAttempts: retries for NOT_COMMITTED or UNKNOWN (default: 1)
+- backoff: delay between retries in milliseconds (default: 100)
+- unknownOutcomePolicy: RETRY or FAIL if the outcome cannot be determined (default: RETRY)
+
+== Behavior and Limitations
+
+- Idempotency: If the outcome is NOT_COMMITTED or UNKNOWN with RETRY, the method can be re-executed; ensure the logic is idempotent or guarded by unique constraints.
+- Scope: Applies to new top-level transactions. Nested or participating transactions are not eligible because TG tracks commit outcome at transaction boundaries.
+- Application Continuity: If using UCP with replay (AC), consider whether `@Recoverable` is needed. AC may already provide transparent replay. `@Recoverable` is TG-only and does not do driver-level replay.
+- No-op if unsupported: If the datasource is not Oracle or TG is not enabled for it, the annotation is inert and normal transactional behavior applies.
+
+== Troubleshooting
+
+- Ensure the Oracle service is created with commit outcome enabled and the client connects via that service.
+- Verify that `datasources.<name>.dialect` is `ORACLE` and `enable-oracle-transaction-guard` is `true`.
+- Check driver and database versions support `SYS_CONTEXT('USERENV','LTXID')` and `DBMS_APP_CONT.GET_LTXID_OUTCOME`.
