@@ -52,6 +52,7 @@ import io.micronaut.data.model.schema.sql.SqlColumnMapping;
 import io.micronaut.data.model.schema.sql.SqlIndexMapping;
 import io.micronaut.data.model.schema.sql.SqlSequenceMapping;
 import io.micronaut.data.model.schema.sql.SqlTableMapping;
+import io.micronaut.data.model.schema.sql.SqlCheckConstraint;
 import jakarta.persistence.criteria.Order;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -199,7 +200,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
      * @return The table
      */
     @Experimental
-    
+
     public String buildBatchCreateTableStatement(PersistentEntity... entities) {
         return Arrays.stream(entities).flatMap(entity -> Stream.of(buildCreateTableStatements(entity)))
             .collect(Collectors.joining(System.lineSeparator()));
@@ -213,7 +214,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
      * @return The table
      */
     @Experimental
-    
+
     public String buildBatchDropTableStatement(PersistentEntity... entities) {
         return Arrays.stream(entities).flatMap(entity -> Stream.of(buildDropTableStatements(entity)))
             .collect(Collectors.joining("\n"));
@@ -227,7 +228,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
      * @return The tables for the give entity
      */
     @Experimental
-    
+
     public String[] buildDropTableStatements(PersistentEntity entity) {
         String tableName = getTableName(entity);
         boolean escape = shouldEscape(entity);
@@ -255,7 +256,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
      * @param association The association
      * @return The join table insert statement
      */
-    
+
     public String buildJoinTableInsert(PersistentEntity entity,  Association association) {
         if (!isForeignKeyWithJoinTable(association)) {
             throw new IllegalArgumentException("Join table inserts can only be built for foreign key associations that are mapped with a join table.");
@@ -306,7 +307,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
      * @return The tables for the give entity
      */
     @Experimental
-    
+
     public String[] buildCreateTableStatements(PersistentEntity entity) {
         List<SqlTableMapping> tables = SqlSchemaUtils.getSqlTableMappings(entity);
         assert CollectionUtils.isNotEmpty(tables);
@@ -333,7 +334,7 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
      * @return The tables for the given entities
      */
     @Experimental
-    
+
     public String[] buildCreateTableStatements(PersistentEntity[] entities) {
         Map<String, SqlTableMapping> sqlTableMappingByTableName = CollectionUtils.newLinkedHashMap(entities.length);
         // Entity can generate indexes, sequences, join tables so need some longer map
@@ -445,6 +446,22 @@ public class SqlQueryBuilder extends AbstractSqlLikeQueryBuilder {
         builder.append(String.join(",", columns));
         if (generatePkAfterColumns) {
             builder.append(", PRIMARY KEY(").append(String.join(",", primaryColumnsName)).append(')');
+        }
+        // Append derived CHECK constraints (if any)
+        List<SqlCheckConstraint> checks = table.checks();
+        if (checks != null && !checks.isEmpty()) {
+            for (SqlCheckConstraint check : checks) {
+                String constraintName = escape ? quote(check.name()) : check.name();
+                String colName = escape ? quote(check.column()) : check.column();
+                // In SQL, CHECK predicates evaluating to UNKNOWN (e.g. comparisons with NULL) do not violate the constraint,
+                // therefore we don't need to explicitly OR with "col IS NULL".
+                String predicate = colName + " " + check.operator() + " " + check.value();
+                builder.append(", CONSTRAINT ")
+                    .append(constraintName)
+                    .append(" CHECK (")
+                    .append(predicate)
+                    .append(')');
+            }
         }
         if (dialect == Dialect.ORACLE) {
             builder.append(")");

@@ -30,6 +30,7 @@ import java.util.List;
  * @param columns The list of columns. See {@link SqlColumnMapping}
  * @param sequences The list of table sequences, can be null or empty. See {@link SqlSequenceMapping}
  * @param indexes The list of table indexes, can be null or empty. See {@link SqlIndexMapping}
+ * @param checks The list of check constraints, can be null or empty. See {@link SqlCheckConstraint}
  *
  * @author radovanradic
  * @since 4.13.0
@@ -42,13 +43,19 @@ public record SqlTableMapping(String schema,
     List<SqlColumnMapping> primaryKeyColumns,
     List<SqlColumnMapping> columns,
     List<SqlSequenceMapping> sequences,
-    List<SqlIndexMapping> indexes) {
+    List<SqlIndexMapping> indexes,
+    List<SqlCheckConstraint> checks) {
     public SqlTableMapping(String schema, String name, boolean escape, TableType type, List<SqlColumnMapping> primaryKeyColumns, List<SqlColumnMapping> columns) {
-        this(schema, name, escape, type, primaryKeyColumns, columns, null, null);
+        this(schema, name, escape, type, primaryKeyColumns, columns, null, null, null);
     }
 
     public SqlTableMapping(String schema, String name, boolean escape, TableType type, List<SqlColumnMapping> primaryKeyColumns, List<SqlColumnMapping> columns, List<SqlSequenceMapping> sequences) {
-        this(schema, name, escape, type, primaryKeyColumns, columns, sequences, null);
+        this(schema, name, escape, type, primaryKeyColumns, columns, sequences, null, null);
+    }
+
+    public SqlTableMapping(String schema, String name, boolean escape, TableType type, List<SqlColumnMapping> primaryKeyColumns, List<SqlColumnMapping> columns,
+                           List<SqlSequenceMapping> sequences, List<SqlIndexMapping> indexes) {
+        this(schema, name, escape, type, primaryKeyColumns, columns, sequences, indexes, null);
     }
 
     /**

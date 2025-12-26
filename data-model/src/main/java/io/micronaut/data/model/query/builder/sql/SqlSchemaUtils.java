@@ -42,6 +42,7 @@ import io.micronaut.data.model.schema.sql.SqlDbType;
 import io.micronaut.data.model.schema.sql.SqlIndexMapping;
 import io.micronaut.data.model.schema.sql.SqlSequenceMapping;
 import io.micronaut.data.model.schema.sql.SqlTableMapping;
+import io.micronaut.data.model.schema.sql.SqlCheckConstraint;
 
 import java.lang.annotation.Annotation;
 import java.sql.Blob;
@@ -52,6 +53,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -92,7 +95,7 @@ public final class SqlSchemaUtils {
      * @since 4.13.0
      */
     @Experimental
-    
+
     @SuppressWarnings("java:S3776")
     public static List<SqlTableMapping> getSqlTableMappings(PersistentEntity entity) {
         ArgumentUtils.requireNonNull("entity", entity);
@@ -170,19 +173,24 @@ public final class SqlSchemaUtils {
         List<SqlColumnMapping> primaryKeyColumns = getPrimaryKeyColumns(identities, namingStrategy);
 
         List<SqlColumnMapping> columns = new ArrayList<>();
+        List<SqlCheckConstraint> checks = new ArrayList<>();
 
         PersistentProperty version = entity.getVersion();
         if (version != null && !version.isGenerated()) {
             String columnName = namingStrategy.mappedName(Collections.emptyList(), version);
-            SqlColumnMapping column = getColumnDefinition(version, columnName, false, true, false);
+            boolean required = isRequired(Collections.emptyList(), version);
+            SqlColumnMapping column = getColumnDefinition(version, columnName, false, required, false);
             columns.add(column);
+            deriveNumericChecks(checks, tableName, columnName, required, version);
         }
 
         BiConsumer<List<Association>, PersistentProperty> addColumn = (associations, property) -> {
             String columnName = namingStrategy.mappedName(associations, property);
-            SqlColumnMapping column = getColumnDefinition(property, columnName, false, isRequired(associations, property),
+            boolean required = isRequired(associations, property);
+            SqlColumnMapping column = getColumnDefinition(property, columnName, false, required,
                 !SqlQueryBuilderUtils.isNotForeign(associations));
             columns.add(column);
+            deriveNumericChecks(checks, tableName, columnName, required, property);
         };
 
         for (PersistentProperty prop : entity.getPersistentProperties()) {
@@ -192,8 +200,20 @@ public final class SqlSchemaUtils {
         List<SqlSequenceMapping> sequences = getSqlSequenceMappings(identities);
         List<SqlIndexMapping> indexes = getSqlIndexMappings(entity);
 
+        // Derive numeric checks for identity properties as well
+        for (PersistentProperty identity : identities) {
+            List<PersistentPropertyPath> ids = new ArrayList<>();
+            PersistentEntityUtils.traversePersistentProperties(Collections.emptyList(), identity, (associations, property)
+                -> ids.add(PersistentPropertyPath.of(associations, property, "")));
+            for (PersistentPropertyPath pp : ids) {
+                String colName = namingStrategy.mappedName(pp.getAssociations(), pp.getProperty());
+                boolean required = isRequired(pp.getAssociations(), pp.getProperty());
+                deriveNumericChecks(checks, tableName, colName, required, pp.getProperty());
+            }
+        }
+
         SqlTableMapping table = new SqlTableMapping(schema, tableName, escape, SqlTableMapping.TableType.MAIN, primaryKeyColumns, columns, sequences,
-            indexes);
+            indexes, checks.isEmpty() ? null : checks);
         tables.add(table);
         return tables;
     }
@@ -393,5 +413,287 @@ public final class SqlSchemaUtils {
             }
         }
         return primaryKeyColumns;
+    }
+
+    private static boolean isNumeric(DataType dt) {
+        return dt.isNumeric();
+    }
+
+    /**
+     * Checks presence of a constraint annotation, accounting for repeatable containers (e.g. X$List).
+     */
+    private static boolean hasConstraint(AnnotationMetadata am, String annotationName) {
+        return hasConstraint0(am, annotationName) || hasConstraint0(am, toJavax(annotationName));
+    }
+
+    private static boolean hasConstraint0(AnnotationMetadata am, String ann) {
+        return am.hasAnnotation(ann) || am.findAnnotation(ann + "$List").isPresent();
+    }
+
+    private static String toJavax(String ann) {
+        return ann.startsWith("jakarta.validation.") ? ann.replace("jakarta.validation.", "javax.validation.") : ann;
+    }
+
+    /**
+     * Resolve the first occurrence of an annotation either as a direct annotation or via its repeatable container ($List).
+     */
+    private static Optional<AnnotationValue<Annotation>> findConstraintAnnotation(AnnotationMetadata am, String baseAnnotationName) {
+        // Try jakarta first
+        Optional<AnnotationValue<Annotation>> direct = am.findAnnotation(baseAnnotationName);
+        if (direct.isPresent()) {
+            return direct;
+        }
+        Optional<AnnotationValue<Annotation>> fromList = am.findAnnotation(baseAnnotationName + "$List")
+            .flatMap(SqlSchemaUtils::firstContained);
+        if (fromList.isPresent()) {
+            return fromList;
+        }
+        // Fallback to javax
+        String alt = toJavax(baseAnnotationName);
+        Optional<AnnotationValue<Annotation>> directAlt = am.findAnnotation(alt);
+        if (directAlt.isPresent()) {
+            return directAlt;
+        }
+        Optional<AnnotationValue<Annotation>> fromListAlt = am.findAnnotation(alt + "$List")
+            .flatMap(SqlSchemaUtils::firstContained);
+        if (fromListAlt.isPresent()) {
+            return fromListAlt;
+        }
+        // As a last resort, scan all present annotation names to find any matching simple name (handles unusual storage)
+        try {
+            Set<String> names = am.getAnnotationNames();
+            String simple = baseAnnotationName.substring(baseAnnotationName.lastIndexOf('.') + 1);
+            Optional<String> any = names.stream()
+                .filter(n -> n.endsWith("." + simple) || n.endsWith("." + simple + "$List"))
+                .findFirst();
+            if (any.isPresent()) {
+                String found = any.get();
+                if (found.endsWith("$List")) {
+                    return am.findAnnotation(found)
+                        .flatMap(v -> {
+                            Optional value = v.getValue(AnnotationValue.class);
+                            return (Optional<AnnotationValue<Annotation>>) value;
+                        });
+                } else {
+                    return am.findAnnotation(found);
+                }
+            }
+        } catch (Throwable ignored) {
+            // Some AnnotationMetadata impls may not support name enumeration; ignore and return empty
+        }
+        return Optional.empty();
+    }
+
+     /**
+      * Return the first contained annotation from a repeatable container annotation value.
+      * - "value" attribute as AnnotationValue[]
+      * - enumerating annotations under VALUE_MEMBER
+      * - falling back to the container itself (some impls squash singletons)
+      */
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private static Optional<AnnotationValue<Annotation>> firstContained(AnnotationValue<?> container) {
+        try {
+            Optional<AnnotationValue[]> arr = container.get("value", AnnotationValue[].class);
+            if (arr.isPresent()) {
+                AnnotationValue[] avs = arr.get();
+                if (avs != null && avs.length > 0) {
+                    return (Optional) Optional.of(avs[0]);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            var list = container.getAnnotations(VALUE_MEMBER, Annotation.class);
+            if (list != null && !list.isEmpty()) {
+                return (Optional) list.stream().findFirst();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            Optional v = container.getValue(AnnotationValue.class);
+            if (v.isPresent()) {
+                return (Optional) v;
+            }
+        } catch (Throwable ignored) {
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Resolve a numeric member from an annotation which may appear directly or in its repeatable container.
+     */
+    private static OptionalLong getFirstLongValue(AnnotationMetadata am, String baseAnnotationName, String member) {
+        // Resolve via unified finder (handles direct + $List + javax fallback)
+        Optional<AnnotationValue<Annotation>> ann = findConstraintAnnotation(am, baseAnnotationName);
+        if (ann.isPresent()) {
+            return ann.get().longValue(member);
+        }
+        return OptionalLong.empty();
+    }
+
+    /**
+     * Resolve first integral value (int/long) from annotation, supporting direct and $List containers,
+     * and both jakarta and javax namespaces.
+     */
+    private static Optional<String> getFirstIntegralString(AnnotationMetadata am, String baseAnnotationName, String member) {
+        Optional<AnnotationValue<Annotation>> av = findConstraintAnnotation(am, baseAnnotationName);
+        if (av.isPresent()) {
+            Optional<String> s = extractMemberAsString(av.get(), member);
+            if (s.isPresent()) {
+                return s;
+            }
+        }
+        String alt = toJavax(baseAnnotationName);
+        if (!alt.equals(baseAnnotationName)) {
+            Optional<AnnotationValue<Annotation>> av2 = findConstraintAnnotation(am, alt);
+            if (av2.isPresent()) {
+                Optional<String> s2 = extractMemberAsString(av2.get(), member);
+                if (s2.isPresent()) {
+                    return s2;
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Extract a member value from an AnnotationValue as a String, trying long/int/string/object coercions.
+     */
+    private static Optional<String> extractMemberAsString(AnnotationValue<?> av, String member) {
+        // Try numeric accessors
+        OptionalLong l = av.longValue(member);
+        if (l.isPresent()) {
+            return Optional.of(String.valueOf(l.getAsLong()));
+        }
+        OptionalInt i = av.intValue(member);
+        if (i.isPresent()) {
+            return Optional.of(String.valueOf(i.getAsInt()));
+        }
+        // Try direct string
+        Optional<String> s = av.stringValue(member);
+        if (s.isPresent()) {
+            return s;
+        }
+        // Try generic typed extraction
+        try {
+            Optional<Long> ol = av.get(member, Long.class);
+            if (ol.isPresent()) {
+                return Optional.of(String.valueOf(ol.get()));
+            }
+            Optional<Integer> oi = av.get(member, Integer.class);
+            if (oi.isPresent()) {
+                return Optional.of(String.valueOf(oi.get()));
+            }
+            Optional<Object> oo = av.get(member, Object.class);
+            if (oo.isPresent()) {
+                return Optional.of(String.valueOf(oo.get()));
+            }
+        } catch (Throwable ignored) {
+        }
+        return Optional.empty();
+    }
+
+    private static void deriveNumericChecks(List<SqlCheckConstraint> out, String table, String column, boolean required, PersistentProperty property) {
+        if (!isNumeric(property.getDataType())) {
+            return;
+        }
+        AnnotationMetadata am = property.getAnnotationMetadata();
+        // DEBUG: temporary logging to diagnose missing Min/Max/Decimal* annotations in tests
+
+
+        // Positive family
+        if (hasConstraint(am, "jakarta.validation.constraints.Positive")) {
+            addCheck(out, table, column, required, ">", "0");
+        }
+        if (hasConstraint(am, "jakarta.validation.constraints.PositiveOrZero")) {
+            addCheck(out, table, column, required, ">=", "0");
+        }
+        if (hasConstraint(am, "jakarta.validation.constraints.Negative")) {
+            addCheck(out, table, column, required, "<", "0");
+        }
+        if (hasConstraint(am, "jakarta.validation.constraints.NegativeOrZero")) {
+            addCheck(out, table, column, required, "<=", "0");
+        }
+
+        // Min/Max (support direct + $List and jakarta/javax, read int/long)
+        Optional<String> minStr = getFirstIntegralString(am, "jakarta.validation.constraints.Min", "value");
+
+        minStr.ifPresent(v -> addCheck(out, table, column, required, ">=", v));
+        Optional<String> maxStr = getFirstIntegralString(am, "jakarta.validation.constraints.Max", "value");
+
+        maxStr.ifPresent(v -> addCheck(out, table, column, required, "<=", v));
+
+        // DecimalMin/DecimalMax (support direct + $List and jakarta/javax)
+        Optional<AnnotationValue<Annotation>> decMin = am.findAnnotation("jakarta.validation.constraints.DecimalMin");
+        if (decMin.isEmpty()) {
+            decMin = am.findAnnotation("jakarta.validation.constraints.DecimalMin$List")
+                .flatMap(SqlSchemaUtils::firstContained);
+        }
+        if (decMin.isEmpty()) {
+            decMin = am.findAnnotation("javax.validation.constraints.DecimalMin");
+            if (decMin.isEmpty()) {
+                decMin = am.findAnnotation("javax.validation.constraints.DecimalMin$List")
+                    .flatMap(SqlSchemaUtils::firstContained);
+            }
+        }
+        decMin.ifPresent(a -> {
+            String v = extractMemberAsString(a, "value").orElse("0");
+            boolean inclusive = a.booleanValue("inclusive").orElse(true);
+
+            addCheck(out, table, column, required, inclusive ? ">=" : ">", v);
+        });
+
+        Optional<AnnotationValue<Annotation>> decMax = am.findAnnotation("jakarta.validation.constraints.DecimalMax");
+        if (decMax.isEmpty()) {
+            decMax = am.findAnnotation("jakarta.validation.constraints.DecimalMax$List")
+                .flatMap(SqlSchemaUtils::firstContained);
+        }
+        if (decMax.isEmpty()) {
+            decMax = am.findAnnotation("javax.validation.constraints.DecimalMax");
+            if (decMax.isEmpty()) {
+                decMax = am.findAnnotation("javax.validation.constraints.DecimalMax$List")
+                    .flatMap(SqlSchemaUtils::firstContained);
+            }
+        }
+        decMax.ifPresent(a -> {
+            String v = extractMemberAsString(a, "value").orElse("0");
+            boolean inclusive = a.booleanValue("inclusive").orElse(true);
+
+            addCheck(out, table, column, required, inclusive ? "<=" : "<", v);
+        });
+    }
+
+    private static void addCheck(List<SqlCheckConstraint> out, String table, String column, boolean required, String op, String value) {
+        String name = "ck_" + sanitize(table) + "_" + sanitize(column) + "_" + opToken(op) + "_" + sanitize(value);
+        // basic length safety
+        if (name.length() > 63) {
+            name = name.substring(0, 63);
+        }
+        out.add(new SqlCheckConstraint(name, column, op, value, !required));
+    }
+
+    private static String sanitize(String s) {
+        if (s == null) {
+            return "x";
+        }
+        String t = s.toLowerCase(java.util.Locale.ENGLISH).replaceAll("[^a-z0-9]", "_");
+        t = t.replaceAll("_+", "_");
+        if (t.startsWith("_")) {
+            t = t.substring(1);
+        }
+        if (t.endsWith("_")) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t.isEmpty() ? "x" : t;
+    }
+
+    private static String opToken(String op) {
+        return switch (op) {
+            case ">" -> "gt";
+            case ">=" -> "ge";
+            case "<" -> "lt";
+            case "<=" -> "le";
+            default -> "op";
+        };
     }
 }
