@@ -16,4 +16,18 @@ class PostgresGeoSpec extends AbstractGeoSpec implements PostgresTestPropertyPro
     List<String> packages() {
         return Arrays.asList("io.micronaut.data.tck.jdbc.entities")
     }
+
+    @Override
+    Map<String, String> getDataSourceProperties(String dataSourceName) {
+        def prefix = 'datasources.' + dataSourceName
+        return [
+                (prefix + '.db-type')                        : dbType(),
+                (prefix + '.schema-generate')                : schemaGenerate(),
+                (prefix + '.dialect')                        : dialect(),
+                (prefix + '.packages')                       : packages(),
+                (prefix + '.enabled')                        : dataSourceEnabled(dataSourceName),
+                "test-resources.containers.postgres.image-name": "postgis/postgis",
+                "test-resources.containers.postgres.image-tag" : "latest"
+        ] as Map<String, String>
+    }
 }

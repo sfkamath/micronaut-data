@@ -3,6 +3,7 @@ package io.micronaut.data.tck.jdbc.entities;
 import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.Id;
 import io.micronaut.data.annotation.MappedEntity;
+import io.micronaut.data.model.geo.GeometryCollection;
 import io.micronaut.data.model.geo.LineString;
 import io.micronaut.data.model.geo.MultiLineString;
 import io.micronaut.data.model.geo.MultiPoint;
@@ -28,6 +29,8 @@ public class GeoEntity {
     private Polygon polygon;
 
     private MultiPolygon multiPolygon;
+
+    private GeometryCollection geometryCollection;
 
     public Long getId() {
         return id;
@@ -83,5 +86,13 @@ public class GeoEntity {
 
     public void setMultiPolygon(MultiPolygon multiPolygon) {
         this.multiPolygon = multiPolygon;
+    }
+
+    public GeometryCollection getGeometryCollection() {
+        return geometryCollection;
+    }
+
+    public void setGeometryCollection(GeometryCollection geometryCollection) {
+        this.geometryCollection = geometryCollection;
     }
 }

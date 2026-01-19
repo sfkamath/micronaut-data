@@ -285,7 +285,6 @@ public final class SqlSchemaUtils {
         if (definitionOpt.isPresent()) {
             return definitionOpt.get();
         }
-
         if (prop.isAssignable(Geometry.class)) {
             if (dialect == Dialect.ORACLE) {
                 return "SDO_GEOMETRY";
@@ -293,8 +292,10 @@ public final class SqlSchemaUtils {
             if (dialect == Dialect.MYSQL || dialect == Dialect.POSTGRES || dialect == Dialect.H2) {
                 return "GEOMETRY";
             }
+            if (dialect == Dialect.SQL_SERVER) {
+                return "GEOGRAPHY";
+            }
         }
-
         return null;
     }
 
