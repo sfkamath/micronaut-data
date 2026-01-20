@@ -19,6 +19,7 @@ import io.micronaut.core.annotation.Internal;
 import io.micronaut.core.annotation.Introspected;
 import org.jspecify.annotations.Nullable;
 import io.micronaut.data.annotation.MappedEntity;
+import io.micronaut.data.annotation.Embeddable;
 import io.micronaut.data.annotation.RepositoryConfiguration;
 import io.micronaut.data.processor.visitors.MatchFailedException;
 import io.micronaut.inject.ast.ClassElement;
@@ -60,6 +61,10 @@ public final class MatchUtils {
 
         boolean isRuntimeDto = false;
         boolean isDto = isIsDto(repositoryClass, queryResultType, resultType);
+
+        if (!rootEntity.equals(resultType) && resultType.hasStereotype(Embeddable.class)) {
+            isDto = true;
+        }
 
         if (isDto) {
             isRuntimeDto = isDtoType(repositoryClass, resultType);

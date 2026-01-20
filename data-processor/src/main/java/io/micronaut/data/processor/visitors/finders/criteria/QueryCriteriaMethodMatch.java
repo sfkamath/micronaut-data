@@ -41,6 +41,8 @@ import io.micronaut.data.model.query.builder.sql.Dialect;
 import io.micronaut.data.model.query.builder.sql.SqlQueryBuilder;
 import io.micronaut.data.processor.model.SourcePersistentEntity;
 import io.micronaut.data.processor.model.SourcePersistentProperty;
+import io.micronaut.data.processor.model.SourceAssociation;
+import io.micronaut.data.annotation.Embeddable;
 import io.micronaut.data.processor.model.criteria.SourcePersistentEntityCriteriaQuery;
 import io.micronaut.data.processor.model.criteria.impl.MethodMatchSourcePersistentEntityCriteriaBuilderImpl;
 import io.micronaut.data.processor.visitors.MatchFailedException;
@@ -61,7 +63,6 @@ import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
 
 import java.util.ArrayList;
@@ -430,25 +431,61 @@ public class QueryCriteriaMethodMatch extends AbstractCriteriaMethodMatch {
         );
 
         if (result.isDto() && !result.isRuntimeDtoConversion()) {
-            List<SourcePersistentProperty> dtoProjectionProperties = getDtoProjectionProperties(persistentEntity, matchContext.getMethodElement(), resultType);
-            if (!dtoProjectionProperties.isEmpty()) {
-                Root<?> root = query.getRoots().iterator().next();
-                List<Selection<?>> selectionList = dtoProjectionProperties.stream()
-                    .map(p -> {
-                        if (matchContext.getQueryBuilder() instanceof SqlQueryBuilder) {
-                            return root.get(p.getName());
-                        } else {
-                            return root.get(p.getName()).alias(p.getName());
-                        }
-                    })
-                    .collect(Collectors.toList());
-                query.multiselect(
-                    selectionList
-                );
+            PersistentEntityRoot<Object> root = (PersistentEntityRoot<Object>) query.getRoots().iterator().next();
+            if (resultType.hasStereotype(Embeddable.class)) {
+                String basePathLocal = null;
+                for (var p : persistentEntity.getPersistentProperties()) {
+                    if (p instanceof SourceAssociation sa && sa.isEmbedded()
+                        && sa.getAssociatedEntity().getType().getName().equals(resultType.getName())) {
+                        basePathLocal = p.getName();
+                        break;
+                    }
+                }
+                final String basePath = basePathLocal;
+                if (basePath != null) {
+                    // Resolve embedded associated entity to compute proper persisted aliases (e.g. zip_code)
+                    SourcePersistentProperty baseProp = persistentEntity.getPropertyByName(basePath);
+                    SourcePersistentEntity embeddedEntity = baseProp instanceof SourceAssociation esa ? (SourcePersistentEntity) esa.getAssociatedEntity() : null;
+                    List<Selection<?>> selectionList = resultType.getBeanProperties().stream()
+                        .filter(dtoProperty -> {
+                            String propertyName = dtoProperty.getName();
+                            return !("metaClass".equals(propertyName) && dtoProperty.getType().isAssignable("groovy.lang.MetaClass"));
+                        })
+                        .map(dtoProperty -> {
+                            String propertyName = dtoProperty.getName();
+                            String aliasName = propertyName;
+                            if (embeddedEntity != null) {
+                                SourcePersistentProperty child = embeddedEntity.getPropertyByName(propertyName);
+                                if (child != null) {
+                                    aliasName = embeddedEntity.getNamingStrategy().mappedName(child);
+                                }
+                            }
+                            return root.get(basePath).get(propertyName).alias(aliasName);
+                        })
+                        .collect(Collectors.toList());
+                    if (!selectionList.isEmpty()) {
+                        query.multiselect(selectionList);
+                    }
+                }
+            } else {
+                List<SourcePersistentProperty> dtoProjectionProperties = getDtoProjectionProperties(persistentEntity, matchContext.getMethodElement(), resultType);
+                if (!dtoProjectionProperties.isEmpty()) {
+                    List<Selection<?>> selectionList = dtoProjectionProperties.stream()
+                        .map(p -> {
+                            if (matchContext.getQueryBuilder() instanceof SqlQueryBuilder) {
+                                return root.get(p.getName());
+                            } else {
+                                return root.get(p.getName()).alias(p.getName());
+                            }
+                        })
+                        .collect(Collectors.toList());
+                    query.multiselect(selectionList);
+                }
             }
         }
 
-        final AnnotationMetadata annotationMetadata = matchContext.getMethodElement();
+
+         final AnnotationMetadata annotationMetadata = matchContext.getMethodElement();
         QueryResult queryResult = criteriaQuery.build(annotationMetadata, matchContext.getQueryBuilder());
 
         ClassElement genericReturnType = matchContext.getReturnType();

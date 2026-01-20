@@ -2640,7 +2640,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
                 } else if (!propertyPath.getAssociations().isEmpty() && queryState.isJoined(propertyPath.getAssociationsPath())) {
                     appendPropertyProjection(findProperty(propertyPath.getPath()));
                 } else {
-                    appendCompoundPropertyProjection(propertyPath);
+                    appendPropertyProjection(findProperty(propertyPath.getPath()));
                 }
             } else {
                 if (distinct) {
@@ -2870,6 +2870,9 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
                 query.append(propertyPath.getPath());
                 if (jsonEntityColumn != null) {
                     appendJsonProjection(query, propertyPath.getProperty().getDataType());
+                }
+                if (StringUtils.isNotEmpty(columnAlias)) {
+                    query.append(AS_CLAUSE).append(columnAlias);
                 }
                 return;
             }

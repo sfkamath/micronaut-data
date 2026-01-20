@@ -20,10 +20,13 @@ import io.micronaut.data.tck.entities.Address;
 import io.micronaut.data.tck.entities.Restaurant;
 
 public interface RestaurantRepository extends CrudRepository<Restaurant, Long> {
+ 
+     Restaurant findByAddress(Address address);
+ 
+     Address findAddressById(Long id);
+ 
+     String getMaxAddressStreetByName(String name);
+ 
+     String getMinAddressStreetByName(String name);
+ }
 
-    Restaurant findByAddress(Address address);
-
-    String getMaxAddressStreetByName(String name);
-
-    String getMinAddressStreetByName(String name);
-}

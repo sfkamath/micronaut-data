@@ -76,5 +76,13 @@ class H2EmbeddedSpec extends Specification {
         then:"The correct query is executed"
         restaurant.address.street == 'Smith St.'
 
+        when:"Find embedded Address by id"
+        Address addr = restaurantRepository.findAddressById(restaurant.id)
+
+        then:"The embedded Address is returned"
+        addr != null
+        addr.street == 'Smith St.'
+        addr.zipCode == '1234'
+
     }
 }
