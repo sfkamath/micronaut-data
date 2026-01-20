@@ -434,11 +434,25 @@ public class QueryCriteriaMethodMatch extends AbstractCriteriaMethodMatch {
             PersistentEntityRoot<Object> root = (PersistentEntityRoot<Object>) query.getRoots().iterator().next();
             if (resultType.hasStereotype(Embeddable.class)) {
                 String basePathLocal = null;
+                String projectionProperty = findMatchPart(matches, QueryMatchId.PROJECTION).orElse(null);
+                String expectedBase = projectionProperty == null || projectionProperty.isBlank() ? null : NameUtils.decapitalize(projectionProperty);
                 for (var p : persistentEntity.getPersistentProperties()) {
                     if (p instanceof SourceAssociation sa && sa.isEmbedded()
                         && sa.getAssociatedEntity().getType().getName().equals(resultType.getName())) {
-                        basePathLocal = p.getName();
-                        break;
+                        String candidate = p.getName();
+                        if (expectedBase != null) {
+                            if (candidate.equals(expectedBase)) {
+                                basePathLocal = candidate;
+                                break;
+                            }
+                            // Defer selection; if no exact match found, we will fallback to the first candidate
+                            if (basePathLocal == null) {
+                                basePathLocal = candidate;
+                            }
+                        } else {
+                            basePathLocal = candidate;
+                            break;
+                        }
                     }
                 }
                 final String basePath = basePathLocal;

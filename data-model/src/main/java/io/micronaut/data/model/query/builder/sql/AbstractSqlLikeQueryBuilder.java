@@ -2640,7 +2640,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
                 } else if (!propertyPath.getAssociations().isEmpty() && queryState.isJoined(propertyPath.getAssociationsPath())) {
                     appendPropertyProjection(findProperty(propertyPath.getPath()));
                 } else {
-                    appendPropertyProjection(findProperty(propertyPath.getPath()));
+                    appendCompoundPropertyProjection(propertyPath);
                 }
             } else {
                 if (distinct) {

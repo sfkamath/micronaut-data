@@ -84,5 +84,13 @@ class H2EmbeddedSpec extends Specification {
         addr.street == 'Smith St.'
         addr.zipCode == '1234'
 
+        when:"Find HQ embedded Address by id (prefixed)"
+        Address hqa = restaurantRepository.findHqAddressById(restaurant.id)
+
+        then:"The prefixed embedded HQ Address is returned"
+        hqa != null
+        hqa.street == 'John St.'
+        hqa.zipCode == '4567'
+
     }
 }
