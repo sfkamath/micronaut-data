@@ -498,8 +498,7 @@ public class QueryCriteriaMethodMatch extends AbstractCriteriaMethodMatch {
             }
         }
 
-
-         final AnnotationMetadata annotationMetadata = matchContext.getMethodElement();
+        final AnnotationMetadata annotationMetadata = matchContext.getMethodElement();
         QueryResult queryResult = criteriaQuery.build(annotationMetadata, matchContext.getQueryBuilder());
 
         ClassElement genericReturnType = matchContext.getReturnType();

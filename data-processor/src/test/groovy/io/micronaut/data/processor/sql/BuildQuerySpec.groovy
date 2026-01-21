@@ -981,6 +981,7 @@ interface BookRepository extends GenericRepository<Book, Long> {
 import io.micronaut.data.jdbc.annotation.JdbcRepository;
 import io.micronaut.data.model.query.builder.sql.Dialect;
 import io.micronaut.data.repository.GenericRepository;
+import io.micronaut.data.tck.entities.Address;
 import io.micronaut.data.tck.entities.Restaurant;
 import java.util.Optional;
 
@@ -994,6 +995,10 @@ interface RestaurantRepository extends GenericRepository<Restaurant, Long> {
     Restaurant findByAddressStreet(String street);
 
     String getMaxAddressStreetByName(String name);
+
+    Optional<Address> findAddressById(Long id);
+
+    Optional<Address> findHqAddressByName(String name);
 }
 
 """)
@@ -1002,11 +1007,15 @@ interface RestaurantRepository extends GenericRepository<Restaurant, Long> {
         def saveQuery = getQuery(repository.getRequiredMethod("save", Restaurant))
         def findByAddressStreetQuery = getQuery(repository.getRequiredMethod("findByAddressStreet", String))
         def getMaxAddressStreetByNameQuery = getQuery(repository.getRequiredMethod("getMaxAddressStreetByName", String))
+        def findAddressByIdQuery = getQuery(repository.getRequiredMethod("findAddressById", Long))
+        def findHqAddressByNameQuery = getQuery(repository.getRequiredMethod("findHqAddressByName", String))
         expect:
         findByNameQuery == 'SELECT restaurant_.`id`,restaurant_.`name`,restaurant_.`address_street`,restaurant_.`address_zip_code`,restaurant_.`hqaddress_street`,restaurant_.`hqaddress_zip_code` FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
         saveQuery == 'INSERT INTO `restaurant` (`name`,`address_street`,`address_zip_code`,`hqaddress_street`,`hqaddress_zip_code`) VALUES (?,?,?,?,?)'
         findByAddressStreetQuery == 'SELECT restaurant_.`id`,restaurant_.`name`,restaurant_.`address_street`,restaurant_.`address_zip_code`,restaurant_.`hqaddress_street`,restaurant_.`hqaddress_zip_code` FROM `restaurant` restaurant_ WHERE (restaurant_.`address_street` = ?)'
         getMaxAddressStreetByNameQuery == 'SELECT MAX(restaurant_.`address_street`) FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
+        findAddressByIdQuery == 'SELECT restaurant_.`address_street` AS street,restaurant_.`address_zip_code` AS zip_code FROM `restaurant` restaurant_ WHERE (restaurant_.`id` = ?)'
+        findHqAddressByNameQuery == 'SELECT restaurant_.`hqaddress_street` AS street,restaurant_.`hqaddress_zip_code` AS zip_code FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
     }
 
     void "test count query with joins"() {
