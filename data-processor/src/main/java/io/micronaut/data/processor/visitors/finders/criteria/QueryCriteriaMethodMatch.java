@@ -456,31 +456,33 @@ public class QueryCriteriaMethodMatch extends AbstractCriteriaMethodMatch {
                     }
                 }
                 final String basePath = basePathLocal;
-                if (basePath != null) {
-                    // Resolve embedded associated entity to compute proper persisted aliases (e.g. zip_code)
-                    SourcePersistentProperty baseProp = persistentEntity.getPropertyByName(basePath);
-                    SourcePersistentEntity embeddedEntity = baseProp instanceof SourceAssociation esa ? (SourcePersistentEntity) esa.getAssociatedEntity() : null;
-                    List<Selection<?>> selectionList = resultType.getBeanProperties().stream()
-                        .filter(dtoProperty -> {
-                            String propertyName = dtoProperty.getName();
-                            return !("metaClass".equals(propertyName) && dtoProperty.getType().isAssignable("groovy.lang.MetaClass"));
-                        })
-                        .map(dtoProperty -> {
-                            String propertyName = dtoProperty.getName();
-                            String aliasName = propertyName;
-                            if (embeddedEntity != null) {
-                                SourcePersistentProperty child = embeddedEntity.getPropertyByName(propertyName);
-                                if (child != null) {
-                                    aliasName = embeddedEntity.getNamingStrategy().mappedName(child);
-                                }
-                            }
-                            return root.get(basePath).get(propertyName).alias(aliasName);
-                        })
-                        .collect(Collectors.toList());
-                    if (!selectionList.isEmpty()) {
-                        query.multiselect(selectionList);
-                    }
+                if (basePath == null) {
+                    throw new MatchFailedException("No embedded association of type '" + resultType.getName() + "' found on entity '" + persistentEntity.getName() + "'.");
                 }
+                // Resolve embedded associated entity to compute proper persisted aliases (e.g. zip_code)
+                SourcePersistentProperty baseProp = persistentEntity.getPropertyByName(basePath);
+                SourcePersistentEntity embeddedEntity = baseProp instanceof SourceAssociation esa ? (SourcePersistentEntity) esa.getAssociatedEntity() : null;
+                List<Selection<?>> selectionList = resultType.getBeanProperties().stream()
+                    .filter(dtoProperty -> {
+                        String propertyName = dtoProperty.getName();
+                        return !("metaClass".equals(propertyName) && dtoProperty.getType().isAssignable("groovy.lang.MetaClass"));
+                    })
+                    .map(dtoProperty -> {
+                        String propertyName = dtoProperty.getName();
+                        String aliasName = propertyName;
+                        if (embeddedEntity != null) {
+                            SourcePersistentProperty child = embeddedEntity.getPropertyByName(propertyName);
+                            if (child != null) {
+                                aliasName = embeddedEntity.getNamingStrategy().mappedName(child);
+                            }
+                        }
+                        return root.get(basePath).get(propertyName).alias(aliasName);
+                    })
+                    .collect(Collectors.toList());
+                if (selectionList.isEmpty()) {
+                    throw new MatchFailedException("Embeddable '" + resultType.getName() + "' has no projectable properties.");
+                }
+                query.multiselect(selectionList);
             } else {
                 List<SourcePersistentProperty> dtoProjectionProperties = getDtoProjectionProperties(persistentEntity, matchContext.getMethodElement(), resultType);
                 if (!dtoProjectionProperties.isEmpty()) {

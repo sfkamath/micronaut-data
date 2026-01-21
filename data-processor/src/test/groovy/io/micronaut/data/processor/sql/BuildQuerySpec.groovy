@@ -983,6 +983,7 @@ import io.micronaut.data.model.query.builder.sql.Dialect;
 import io.micronaut.data.repository.GenericRepository;
 import io.micronaut.data.tck.entities.Address;
 import io.micronaut.data.tck.entities.Restaurant;
+import io.micronaut.data.tck.entities.ShipmentId;
 import java.util.Optional;
 
 @JdbcRepository(dialect = Dialect.H2)
@@ -1016,6 +1017,27 @@ interface RestaurantRepository extends GenericRepository<Restaurant, Long> {
         getMaxAddressStreetByNameQuery == 'SELECT MAX(restaurant_.`address_street`) FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
         findAddressByIdQuery == 'SELECT restaurant_.`address_street` AS street,restaurant_.`address_zip_code` AS zip_code FROM `restaurant` restaurant_ WHERE (restaurant_.`id` = ?)'
         findHqAddressByNameQuery == 'SELECT restaurant_.`hqaddress_street` AS street,restaurant_.`hqaddress_zip_code` AS zip_code FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
+    }
+
+    void "test invalid embedded projection result"() {
+        when:
+        buildRepository('test.RestaurantRepository', """
+import io.micronaut.data.jdbc.annotation.JdbcRepository;
+import io.micronaut.data.model.query.builder.sql.Dialect;
+import io.micronaut.data.repository.GenericRepository;
+import io.micronaut.data.tck.entities.Restaurant;
+import io.micronaut.data.tck.entities.ShipmentId;
+import java.util.Optional;
+
+@JdbcRepository(dialect = Dialect.MYSQL)
+interface RestaurantRepository extends GenericRepository<Restaurant, Long> {
+    Optional<ShipmentId> findAddressByName(String name);
+}
+
+""")
+        then:
+        Throwable ex = thrown()
+        ex.message.contains("No embedded association of type 'io.micronaut.data.tck.entities.ShipmentId' found on entity 'io.micronaut.data.tck.entities.Restaurant'")
     }
 
     void "test count query with joins"() {
