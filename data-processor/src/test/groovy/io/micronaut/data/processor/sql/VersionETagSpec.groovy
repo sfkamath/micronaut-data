@@ -12,11 +12,15 @@ package io.micronaut.data.processor.sql
 import io.micronaut.data.annotation.GeneratedValue
 import io.micronaut.data.annotation.Version
 import io.micronaut.data.annotation.sql.ColumnTransformer
-import io.micronaut.data.annotation.sql.ETagValueBased
+import io.micronaut.data.annotation.DataTransformer
+import io.micronaut.data.annotation.sql.GeneratedEtag
 import io.micronaut.data.annotation.sql.ETagValue
 import io.micronaut.data.model.PersistentEntity
 import io.micronaut.data.model.query.builder.sql.SqlQueryBuilder
-import io.micronaut.data.processor.model.SourcePersistentEntity
+import io.micronaut.data.annotation.MappedEntity
+import io.micronaut.data.annotation.Id
+import io.micronaut.data.annotation.Relation
+import io.micronaut.data.annotation.sql.Etaggable
 import io.micronaut.data.processor.visitors.AbstractDataSpec
 import io.micronaut.data.runtime.criteria.RuntimeCriteriaBuilder
 
@@ -49,43 +53,72 @@ class VersionETagSpec extends AbstractDataSpec {
         etag.annotationMetadata.stringValue(ColumnTransformer, "read").get() == 'SYS_ROW_ETAG(@.id, @.title)'
     }
 
-    void "test @ETagValueBased with @Version field in the entity"() {
+    void "test @GeneratedEtag with @Version field in the entity"() {
         when:
         buildEntity('test.MyEntity', '''
 import io.micronaut.data.annotation.MappedProperty;
-import io.micronaut.data.annotation.sql.ETagValueBased;
+import io.micronaut.data.annotation.sql.GeneratedEtag;
 
 @MappedEntity
 record MyEntity(@Id @GeneratedValue Long id,
     String name,
     @Version Long version,
-    @ETagValueBased(function = "custom") String eTag) {}
+    @GeneratedEtag(function = "custom") String eTag) {}
 ''')
         then:
         def ex = thrown(RuntimeException)
-        ex.message.contains("Entity with @Version field cannot have @ETagValueBased field")
+        ex.message.contains("Entity with @Version field cannot have @GeneratedEtag field")
     }
 
-    void "test @ETagValueBased without @ETagValue fields in the entity"() {
+    void "test @GeneratedEtag without @ETagValue fields in the entity"() {
         when:
         buildEntity('test.MyEntity', '''
 import io.micronaut.data.annotation.MappedProperty;
-import io.micronaut.data.annotation.sql.ETagValueBased;
+import io.micronaut.data.annotation.sql.GeneratedEtag;
 
 @MappedEntity
 record MyEntity(@Id @GeneratedValue Long id,
     String name,
     Long version,
-    @ETagValueBased(function = "custom") String eTag) {}
+    @GeneratedEtag(function = "custom") String eTag) {}
 ''')
         then:
         def ex = thrown(RuntimeException)
-        ex.message.contains("@ETagValueBased requires at least one @ETagValue annotated field")
+        ex.message.contains("@GeneratedEtag requires at least one @ETagValue annotated field or @Etaggable on the entity")
+    }
+
+    void "implicit with includeForeignKeys adds FK column to function args"() {
+        when:
+        def entity = PersistentEntity.of(FkEntity)
+        def etag = entity.getPropertyByName("etag")
+        def readExpr = etag.annotationMetadata.stringValue(ColumnTransformer, "read")
+            .orElseGet(() -> etag.annotationMetadata.stringValue(DataTransformer, "read").orElse(""))
+        then:
+        readExpr.contains("@.other_id")
     }
 }
 
-import io.micronaut.data.annotation.MappedEntity
-import io.micronaut.data.annotation.Id
+@MappedEntity
+@Etaggable(includeForeignKeys = true)
+class FkEntity {
+    @Id
+    @GeneratedValue
+    Long id
+
+    @Relation(Relation.Kind.MANY_TO_ONE)
+    Other other
+
+    @GeneratedEtag(function = "SYS_ROW_ETAG")
+    String etag
+}
+
+@MappedEntity
+class Other {
+    @Id
+    @GeneratedValue
+    Long id
+    String name
+}
 
 @MappedEntity("book")
 class ETagBook {
@@ -94,6 +127,6 @@ class ETagBook {
     Long id
     @ETagValue
     String title
-    @ETagValueBased(function = "SYS_ROW_ETAG")
+    @GeneratedEtag(function = "SYS_ROW_ETAG")
     String etag
 }

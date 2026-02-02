@@ -18,7 +18,7 @@ package io.micronaut.data.model.query.builder.sql;
 import io.micronaut.core.annotation.AnnotationMetadata;
 import io.micronaut.core.annotation.AnnotationValue;
 import io.micronaut.core.annotation.Internal;
-import io.micronaut.data.annotation.sql.ETagValueBased;
+import io.micronaut.data.annotation.sql.GeneratedEtag;
 import org.jspecify.annotations.Nullable;
 import io.micronaut.core.util.ArgumentUtils;
 import io.micronaut.core.util.ArrayUtils;
@@ -1342,7 +1342,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
         }
         QueryPropertyPath propertyPath = queryState.findProperty(pp);
         String tableAlias = propertyPath.getTableAlias();
-        boolean isETagProperty = propertyPath.getProperty().getAnnotationMetadata().hasAnnotation(ETagValueBased.class);
+        boolean isETagProperty = propertyPath.getProperty().getAnnotationMetadata().hasAnnotation(GeneratedEtag.class);
         String readTransformer = isProjection || isETagProperty ? getDataTransformerReadValue(tableAlias, propertyPath.getProperty()).orElse(null) : null;
         if (readTransformer != null) {
             query.append(readTransformer);
@@ -1502,7 +1502,7 @@ public abstract class AbstractSqlLikeQueryBuilder implements QueryBuilder {
             this(queryBuilder, query, allowJoins, useAlias, null);
         }
 
-        private QueryState(QueryBuilder queryBuilder, BaseQueryDefinition query, boolean allowJoins, boolean useAlias, String tableAliasPrefix) {
+        private QueryState(QueryBuilder queryBuilder, BaseQueryDefinition query, boolean allowJoins, boolean useAlias, @Nullable String tableAliasPrefix) {
             this.queryBuilder = queryBuilder;
             this.allowJoins = allowJoins;
             this.baseQueryDefinition = query;

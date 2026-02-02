@@ -24,17 +24,17 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
  * Marker annotation to indicate that the annotated mapped property participates
- * in the computation of an entity {@link ETagValueBased}.
+ * in the computation of an entity {@link GeneratedEtag}.
  * <p>
  * Fields or properties annotated with {@code @ETagValue} will be gathered by the
  * annotation processing step to build the read expression of a {@link ColumnTransformer}
- * on the property annotated with {@link ETagValueBased}.
+ * on the property annotated with {@link GeneratedEtag}.
  * <p>
  * The processor resolves the persisted/column names of the marked properties, so
  * fields within embedded types are handled according to the configured naming strategy.
  *
  * <p>Usage: mark properties participating in the ETag with {@literal @}ETagValue, and annotate the target ETag
- * property with {@link ETagValueBased}. The processor derives the SQL read expression accordingly.</p>
+ * property with {@link GeneratedEtag}. The processor derives the SQL read expression accordingly.</p>
  *
  * @author radovanradic
  * @since 5.0

@@ -30,7 +30,8 @@ import io.micronaut.data.annotation.GeneratedValue;
 import io.micronaut.data.annotation.sql.JoinColumn;
 import io.micronaut.data.annotation.sql.JoinColumns;
 import io.micronaut.data.annotation.sql.ColumnTransformer;
-import io.micronaut.data.annotation.sql.ETagValueBased;
+import io.micronaut.data.annotation.sql.GeneratedEtag;
+import io.micronaut.data.annotation.sql.Etaggable;
 import io.micronaut.data.annotation.sql.ETagValue;
 import io.micronaut.data.annotation.DataTransformer;
 import io.micronaut.data.model.DataType;
@@ -133,7 +134,7 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
             computeMappingDefaults(entity.getVersion(), dataTypes, dataConverters, context);
         }
 
-        // Synthesize ColumnTransformer(read=...) for @ETagValueBased on version from @ETagValue fields
+        // Synthesize ColumnTransformer(read=...) for @GeneratedEtag based on @ETagValue fields or implicit @Etaggable
         synthesizeETagColumnTransformer(entity, properties);
     }
 
@@ -323,40 +324,81 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
 
     private void synthesizeETagColumnTransformer(SourcePersistentEntity entity,
                                                  List<SourcePersistentProperty> properties) {
-        // Find the property annotated with @ETagValueBased (the ETag holder)
+        // Find the property annotated with @GeneratedEtag (the ETag holder)
         List<SourcePersistentProperty> etagPropList = properties.stream()
-            .filter(p -> p.getAnnotationMetadata().hasAnnotation(ETagValueBased.class))
+            .filter(p -> p.getAnnotationMetadata().hasAnnotation(GeneratedEtag.class))
             .toList();
         if (CollectionUtils.isEmpty(etagPropList)) {
             return;
         }
         if (etagPropList.size() > 1) {
-            throw new ProcessingException(etagPropList.get(1), "Only one field can be marked as @ETagValueBased");
+            throw new ProcessingException(etagPropList.get(1), "Only one field can be marked as @GeneratedEtag");
         }
         SourcePersistentProperty etagProp = etagPropList.get(0);
-        if (entity.getVersion() != null) {
-            throw new ProcessingException(etagProp, "Entity with @Version field cannot have @ETagValueBased field");
+        if (entity.hasVersion()) {
+            throw new ProcessingException(etagProp, "Entity with @Version field cannot have @GeneratedEtag field");
         }
 
         AnnotationMetadata etagMetadata = etagProp.getAnnotationMetadata();
-        String function = etagMetadata.stringValue(ETagValueBased.class, "function").orElse(null);
+        String function = etagMetadata.stringValue(GeneratedEtag.class, "function").orElse(null);
         if (function == null || function.isEmpty()) {
-            throw new ProcessingException(etagProp, "@ETagValueBased requires non-empty 'function' value");
+            throw new ProcessingException(etagProp, "@GeneratedEtag requires non-empty 'function' value");
         }
 
+        boolean entityEtaggable = entity.getType().hasStereotype(Etaggable.class);
+        boolean includeForeignKeys = entity.getType().booleanValue(Etaggable.class, "includeForeignKeys").orElse(false);
         Set<String> parts = new LinkedHashSet<>();
 
-        // Traverse all persistent properties (including identity) and collect @ETagValue columns.
+        // Traverse all persistent properties (including identity) and collect @ETagValue columns or implicitly included ones.
         // This handles embedded paths and association FKs consistently with the rest of the project.
         PersistentEntityUtils.traversePersistentProperties(entity, true, false, (associations, property) -> {
-            if (property.getAnnotationMetadata().hasAnnotation(ETagValue.class)) {
+            boolean explicit = property.getAnnotationMetadata().hasAnnotation(ETagValue.class);
+            boolean implicit = entityEtaggable && ImplicitEtagUtils.isImplicitEtagEligible(entity, associations, property, etagProp, includeForeignKeys);
+            if (explicit || implicit) {
                 String column = entity.getNamingStrategy().mappedName(associations, property);
                 parts.add(column);
             }
         });
 
+        // Implicit include for owning-side FKs that traversal skips
+        if (entityEtaggable && includeForeignKeys) {
+            for (SourcePersistentProperty p : properties) {
+                if (p instanceof io.micronaut.data.model.Association assoc && !(assoc instanceof io.micronaut.data.model.Embedded)) {
+                    io.micronaut.data.annotation.Relation.Kind k = assoc.getKind();
+                    if (k == io.micronaut.data.annotation.Relation.Kind.MANY_TO_ONE || k == io.micronaut.data.annotation.Relation.Kind.ONE_TO_ONE) {
+                        String column = entity.getNamingStrategy().mappedName(java.util.Collections.emptyList(), p);
+                        parts.add(column);
+                    }
+                }
+            }
+        }
+
+        // Handle explicit @ETagValue placed on owning-side FK associations which are skipped by traversal
+        for (SourcePersistentProperty p : properties) {
+            if (p.getAnnotationMetadata().hasAnnotation(ETagValue.class)) {
+                // If explicit on a relation, validate it's either embedded or an owning-side FK
+                if (p.getAnnotationMetadata().hasAnnotation(io.micronaut.data.annotation.Relation.class)) {
+                    var kind = p.enumValue(io.micronaut.data.annotation.Relation.class, "value", io.micronaut.data.annotation.Relation.Kind.class).orElse(null);
+                    if (kind == io.micronaut.data.annotation.Relation.Kind.ONE_TO_MANY || kind == io.micronaut.data.annotation.Relation.Kind.MANY_TO_MANY) {
+                        throw new ProcessingException(p, "Explicit @ETagValue on non-embedded, non-foreign-key association is not supported");
+                    }
+                }
+                if (p instanceof io.micronaut.data.model.Association assoc) {
+                    if (assoc instanceof io.micronaut.data.model.Embedded) {
+                        continue;
+                    }
+                    if (assoc.isForeignKey()) {
+                        String column = entity.getNamingStrategy().mappedName(java.util.Collections.emptyList(), p);
+                        parts.add(column);
+                    } else {
+                        throw new ProcessingException(p, "Explicit @ETagValue on non-embedded, non-foreign-key association is not supported");
+                    }
+                }
+            }
+        }
+
         if (parts.isEmpty()) {
-            throw new ProcessingException(etagProp, "@ETagValueBased requires at least one @ETagValue annotated field");
+            throw new ProcessingException(etagProp, "@GeneratedEtag requires at least one @ETagValue annotated field or @Etaggable on the entity");
         }
         // Ensure @Version and @GeneratedValue are present on the ETag property
         PropertyElement etagPropertyElement = etagProp.getPropertyElement();
@@ -366,6 +408,11 @@ public class MappedEntityVisitor implements TypeElementVisitor<MappedEntity, Obj
         // Apply both ColumnTransformer and aliased DataTransformer for downstream consumers/tests
         etagPropertyElement.annotate(ColumnTransformer.class, builder -> builder.member("read", expr));
         etagPropertyElement.annotate(DataTransformer.class, builder -> builder.member("read", expr));
+        // Also annotate the read accessor to ensure javac-backed tests observe the synthesized transformer
+        etagPropertyElement.getReadMethod().ifPresent(m -> {
+            m.annotate(ColumnTransformer.class, b -> b.member("read", expr));
+            m.annotate(DataTransformer.class, b -> b.member("read", expr));
+        });
     }
 
     private static String buildEtagReadExpression(String function, Set<String> parts) {

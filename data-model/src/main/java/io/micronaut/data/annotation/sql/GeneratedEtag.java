@@ -23,32 +23,13 @@ import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
- * Generic helper annotation to configure a computed ETag for optimistic locking.
+ * Marks a mapped property as holding a generated ETag value for optimistic locking.
  * <p>
- * This annotation is a convenience meta-mapping that:
- * <ul>
- *     <li>Marks the property as versioned and generated (equivalent to applying
- *     {@code @io.micronaut.data.annotation.Version} and {@code @io.micronaut.data.annotation.GeneratedValue}).</li>
- *     <li>Applies a {@link ColumnTransformer} read expression like
- *     {@code <function>(@.field1, @.field2, ...)} based on {@link #function()} and {@link ETagValue} annotated fields.</li>
- * </ul>
- * <p>
- * Example:
- * <pre>{@code
- * {@literal @}MappedEntity
- * class Book {
- *   {@literal @}Id
- *   {@literal @}GeneratedValue
- *   {@literal @}ETagValue
- *   Long id;
- *
- *   {@literal @}ETagValue
- *   String title;
- *
- *   {@literal @}ETagValueBased(function = "SYS_ROW_ETAG")
- *   String etag;
- * }
- * }</pre>
+ * This is analogous to {@code @GeneratedValue} for identifiers but specific to ETag/version columns. During
+ * annotation processing, the {@code @GeneratedEtag} property is synthesized as a versioned column and its read value
+ * is computed by applying a SQL function over a set of properties that participate in the ETag.
+ * Those properties are either explicitly marked with {@link ETagValue} or implicitly included when the owning
+ * entity is annotated with {@link Etaggable}.
  *
  * The actual mapping to {@code @Version}, {@code @GeneratedValue} and {@code @ColumnTransformer} is performed
  * by the MappedEntityVisitor in the data-processor module during annotation processing.
@@ -58,11 +39,10 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  */
 @Target({FIELD, METHOD})
 @Retention(RUNTIME)
-public @interface ETagValueBased {
-
+public @interface GeneratedEtag {
     /**
      * The SQL function name to compute the ETag (e.g. {@code SYS_ROW_ETAG}) using values
-     * annotated by {@link ETagValue}.
+     * annotated by {@link ETagValue} or implicitly included via {@link Etaggable}.
      *
      * @return function name
      */

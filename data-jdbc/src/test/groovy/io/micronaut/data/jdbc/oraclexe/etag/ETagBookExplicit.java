@@ -1,17 +1,16 @@
 package io.micronaut.data.jdbc.oraclexe.etag;
 
 import io.micronaut.data.annotation.*;
-import io.micronaut.data.annotation.sql.GeneratedEtag;
 import io.micronaut.data.annotation.sql.ETagValue;
-import io.micronaut.data.annotation.sql.Etaggable;
+import io.micronaut.data.annotation.sql.GeneratedEtag;
 
-@Etaggable
-@MappedEntity("etag_book")
-public record ETagBook(
+@MappedEntity("etag_book_explicit")
+public record ETagBookExplicit(
     @Id
     @GeneratedValue
     @ETagValue
     Long id,
+
     @ETagValue
     String title,
 
@@ -19,13 +18,13 @@ public record ETagBook(
     BookDetails bookDetails,
 
     @GeneratedEtag(function = "SYS_ROW_ETAG")
-    String etag) {
-
+    String etag
+) {
     @Embeddable
     public record BookDetails(
         @ETagValue
         int pages,
+        @ETagValue
         int chapters
-    ) {
-    }
+    ) { }
 }
