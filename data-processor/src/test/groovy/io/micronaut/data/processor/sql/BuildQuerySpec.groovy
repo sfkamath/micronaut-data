@@ -27,6 +27,7 @@ import io.micronaut.data.model.entities.Invoice
 import io.micronaut.data.model.query.builder.sql.Dialect
 import io.micronaut.data.model.query.builder.sql.SqlQueryBuilder
 import io.micronaut.data.processor.entity.ActivityPeriodEntity
+import io.micronaut.data.processor.entity.SomeEntity
 import io.micronaut.data.processor.visitors.AbstractDataSpec
 import io.micronaut.data.runtime.criteria.RuntimeCriteriaBuilder
 import io.micronaut.data.tck.entities.Author
@@ -554,7 +555,7 @@ interface UserRoleRepository extends GenericRepository<UserRole, UserRoleId> {
             def query = getQuery(method)
 
         expect:
-            query == 'SELECT user_role_id_role_.`id`,user_role_id_role_.`name` FROM `user_role_composite` user_role_ INNER JOIN `role_composite` user_role_id_role_ ON user_role_.`id_role_id`=user_role_id_role_.`id` WHERE (user_role_.`id_user_id` = ?)'
+            query == 'SELECT user_role_id_role_.`id`,user_role_id_role_.`name` FROM `user_role_composite` user_role_ INNER JOIN `role_composite` user_role_id_role_ ON user_role_.`role_id`=user_role_id_role_.`id` WHERE (user_role_.`user_id` = ?)'
             getParameterBindingIndexes(method) == ["0"] as String[]
             getParameterBindingPaths(method) == ["id"] as String[]
             getParameterPropertyPaths(method) == ["id.user.id"] as String[]
@@ -1011,11 +1012,11 @@ interface RestaurantRepository extends GenericRepository<Restaurant, Long> {
         def findAddressByIdQuery = getQuery(repository.getRequiredMethod("findAddressById", Long))
         def findHqAddressByNameQuery = getQuery(repository.getRequiredMethod("findHqAddressByName", String))
         expect:
-        findByNameQuery == 'SELECT restaurant_.`id`,restaurant_.`name`,restaurant_.`address_street`,restaurant_.`address_zip_code`,restaurant_.`hqaddress_street`,restaurant_.`hqaddress_zip_code` FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
-        saveQuery == 'INSERT INTO `restaurant` (`name`,`address_street`,`address_zip_code`,`hqaddress_street`,`hqaddress_zip_code`) VALUES (?,?,?,?,?)'
-        findByAddressStreetQuery == 'SELECT restaurant_.`id`,restaurant_.`name`,restaurant_.`address_street`,restaurant_.`address_zip_code`,restaurant_.`hqaddress_street`,restaurant_.`hqaddress_zip_code` FROM `restaurant` restaurant_ WHERE (restaurant_.`address_street` = ?)'
-        getMaxAddressStreetByNameQuery == 'SELECT MAX(restaurant_.`address_street`) FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
-        findAddressByIdQuery == 'SELECT restaurant_.`address_street` AS street,restaurant_.`address_zip_code` AS zip_code FROM `restaurant` restaurant_ WHERE (restaurant_.`id` = ?)'
+        findByNameQuery == 'SELECT restaurant_.`id`,restaurant_.`name`,restaurant_.`street`,restaurant_.`zip_code`,restaurant_.`hqaddress_street`,restaurant_.`hqaddress_zip_code` FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
+        saveQuery == 'INSERT INTO `restaurant` (`name`,`street`,`zip_code`,`hqaddress_street`,`hqaddress_zip_code`) VALUES (?,?,?,?,?)'
+        findByAddressStreetQuery == 'SELECT restaurant_.`id`,restaurant_.`name`,restaurant_.`street`,restaurant_.`zip_code`,restaurant_.`hqaddress_street`,restaurant_.`hqaddress_zip_code` FROM `restaurant` restaurant_ WHERE (restaurant_.`street` = ?)'
+        getMaxAddressStreetByNameQuery == 'SELECT MAX(restaurant_.`street`) FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
+        findAddressByIdQuery == 'SELECT restaurant_.`street` AS street,restaurant_.`zip_code` AS zip_code FROM `restaurant` restaurant_ WHERE (restaurant_.`id` = ?)'
         findHqAddressByNameQuery == 'SELECT restaurant_.`hqaddress_street` AS street,restaurant_.`hqaddress_zip_code` AS zip_code FROM `restaurant` restaurant_ WHERE (restaurant_.`name` = ?)'
     }
 
@@ -1315,7 +1316,7 @@ interface UserRoleRepository extends GenericRepository<UserRole, UserRoleId> {
         def countDistinctQuery = getQuery(repository.getRequiredMethod("countDistinct"))
         expect:
         countQuery == 'SELECT COUNT(*) FROM `user_role_composite` user_role_'
-        countDistinctQuery == 'SELECT COUNT(DISTINCT( CONCAT(user_role_.`id_user_id`,user_role_.`id_role_id`))) FROM `user_role_composite` user_role_'
+        countDistinctQuery == 'SELECT COUNT(DISTINCT( CONCAT(user_role_.`user_id`,user_role_.`role_id`))) FROM `user_role_composite` user_role_'
     }
 
     void "test many-to-one with properties starting with the same prefix"() {
@@ -1588,7 +1589,7 @@ interface UserRoleRepository extends GenericRepository<UserRole, UserRoleId> {
 
         expect:
         countQuery == 'SELECT COUNT(*) FROM `user_role_composite` user_role_'
-        countDistinctQuery == 'SELECT COUNT(DISTINCT( CONCAT(user_role_.`id_user_id`,user_role_.`id_role_id`))) FROM `user_role_composite` user_role_'
+        countDistinctQuery == 'SELECT COUNT(DISTINCT( CONCAT(user_role_.`user_id`,user_role_.`role_id`))) FROM `user_role_composite` user_role_'
     }
 
     void "test escape query"() {
@@ -1848,6 +1849,7 @@ class CountyPk {
 @MappedEntity("comp_country")
 class County {
     @EmbeddedId
+    @MappedProperty(value = "id")
     CountyPk id;
     @MappedProperty
     String countyName;
@@ -1872,6 +1874,7 @@ class SettlementPk {
 @MappedEntity("comp_settlement")
 class Settlement {
     @EmbeddedId
+    @MappedProperty(value = "id")
     SettlementPk id;
     @MappedProperty
     String description;
@@ -2443,7 +2446,7 @@ interface RestaurantRepository extends GenericRepository<Restaurant, Long> {
 
             def method = repository.getRequiredMethod("find", String)
         expect:
-            getQuery(method) == 'SELECT restaurant_.`id`,restaurant_.`name`,restaurant_.`address_street`,restaurant_.`address_zip_code`,restaurant_.`hqaddress_street`,restaurant_.`hqaddress_zip_code` FROM `restaurant` restaurant_ WHERE (restaurant_.`address_street` = ?)'
+            getQuery(method) == 'SELECT restaurant_.`id`,restaurant_.`name`,restaurant_.`street`,restaurant_.`zip_code`,restaurant_.`hqaddress_street`,restaurant_.`hqaddress_zip_code` FROM `restaurant` restaurant_ WHERE (restaurant_.`street` = ?)'
             getParameterBindingIndexes(method) == ["0"] as String[]
             getParameterBindingPaths(method) == [""] as String[]
             getParameterPropertyPaths(method) == ["address.street"] as String[]
@@ -2499,5 +2502,34 @@ interface Repo extends GenericRepository<Book, Long> {
         expect:
         getOperationType(method) == DataMethod.OperationType.UPDATE
         getRawQuery(method) == 'REPLACE INTO book (id, title, total_pages) VALUES (?, ?, ?)'
+    }
+
+    void "test EmbeddedId naming strategy"() {
+        given:
+        def repository = buildRepository('test.SomeEntityRepository', """
+import io.micronaut.data.jdbc.annotation.JdbcRepository;
+import io.micronaut.data.model.query.builder.sql.Dialect;
+import io.micronaut.data.repository.GenericRepository;
+import io.micronaut.data.processor.entity.SomeEntity;
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
+import java.util.Optional;
+@JdbcRepository(dialect = Dialect.H2)
+interface SomeEntityRepository extends GenericRepository<SomeEntity, SomeEntity.PrimaryKey> {
+    Optional<SomeEntity> findById(SomeEntity.PrimaryKey id);
+    SomeEntity save(SomeEntity entity);
+    List<SomeEntity> findAll();
+}
+""")
+
+        def findByIdQuery = getQuery(repository.getRequiredMethod("findById", SomeEntity.PrimaryKey))
+        def saveQuery = getQuery(repository.getRequiredMethod("save", SomeEntity))
+        def findAllQuery = getQuery(repository.getRequiredMethod("findAll"))
+        expect:
+        findByIdQuery == 'SELECT some_entity_.`some_column`,some_entity_.`other_entity_id`,some_entity_.`col` FROM `some_table` some_entity_ WHERE (some_entity_.`some_column` = ? AND some_entity_.`other_entity_id` = ?)'
+        saveQuery == 'INSERT INTO `some_table` (`col`,`some_column`,`other_entity_id`) VALUES (?,?,?)'
+        findAllQuery == 'SELECT some_entity_.`some_column`,some_entity_.`other_entity_id`,some_entity_.`col` FROM `some_table` some_entity_'
     }
 }

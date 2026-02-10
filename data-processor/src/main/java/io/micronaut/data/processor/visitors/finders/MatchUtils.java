@@ -60,11 +60,8 @@ public final class MatchUtils {
         }
 
         boolean isRuntimeDto = false;
-        boolean isDto = isIsDto(repositoryClass, queryResultType, resultType);
-
-        if (!rootEntity.equals(resultType) && resultType.hasStereotype(Embeddable.class)) {
-            isDto = true;
-        }
+        boolean isDto = isIsDto(repositoryClass, queryResultType, resultType) ||
+            (!rootEntity.equals(resultType) && resultType.hasStereotype(Embeddable.class));
 
         if (isDto) {
             isRuntimeDto = isDtoType(repositoryClass, resultType);
