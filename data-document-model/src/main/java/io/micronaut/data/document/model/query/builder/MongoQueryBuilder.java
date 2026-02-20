@@ -1312,9 +1312,6 @@ public final class MongoQueryBuilder implements QueryBuilder {
             Object filterValue;
             Map<String, Object> regexCriteria = new LinkedHashMap<>(2);
             String options = ignoreCase ? "i" : "";
-            if (isLike) {
-                options += "l";
-            }
             regexCriteria.put(OPTIONS, options);
             String regexValue;
             if (value instanceof BindingParameter bindingParameter) {
@@ -1327,6 +1324,14 @@ public final class MongoQueryBuilder implements QueryBuilder {
                 regexValue = (String) literalExpression.getValue();
             } else {
                 regexValue = value.toString();
+            }
+            if (isLike) {
+                String regexValueStr = String.valueOf(regexValue);
+                if (regexValueStr.indexOf(QUERY_PARAMETER_PLACEHOLDER) == -1) {
+                    regexValue = regexValueStr
+                        .replace("_", ".")
+                        .replace("%", ".*");
+                }
             }
             StringBuilder regexValueBuff = new StringBuilder();
             if (startsWith) {

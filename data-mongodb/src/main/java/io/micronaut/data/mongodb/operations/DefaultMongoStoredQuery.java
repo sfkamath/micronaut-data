@@ -554,12 +554,13 @@ final class DefaultMongoStoredQuery<E, R> extends DefaultBindableParametersStore
                     }
                     pattern = pattern.replace(matcher.group(1), e.getValue().toString());
                     String options = bsonRegularExpression.getOptions();
-                    if (options.contains("l")) {
-                        pattern = pattern
-                            .replace("_", ".")
-                            .replace("%", ".*");
-                        options = options.replace("l", "");
-                    }
+                    // Historically LIKE used a pseudo 'l' option to indicate SQL LIKE translation.
+                    // Newer MongoDB versions reject 'l' as an invalid regex option, and we also
+                    // need LIKE to work even when 'l' isn't present.
+                    pattern = pattern
+                        .replace("_", ".")
+                        .replace("%", ".*");
+                    options = options.replace("l", "");
                     return new BsonRegularExpression(pattern, options);
                 }
             }
