@@ -15,6 +15,7 @@
  */
 package io.micronaut.data.jpa.repository;
 
+import io.micronaut.data.model.runtime.RuntimePersistentEntity;
 import org.jspecify.annotations.NonNull;
 import io.micronaut.data.annotation.QueryHint;
 import io.micronaut.data.intercept.annotation.DataMethod;
@@ -40,6 +41,44 @@ import java.util.List;
  * @since 1.0.0
  */
 public interface JpaRepository<E, ID> extends CrudRepository<E, ID>, PageableRepository<E, ID> {
+
+    /**
+     * Convenience operation that will {@link #persist(Object)} the given entity if it appears to be new
+     * or {@link #merge(Object)} it otherwise.
+     * <p>
+     * <b>Note:</b> This method uses a simple heuristic:
+     * <ul>
+     *     <li>If the entity has a {@code @Version} property and it is {@code null}, the entity is treated as new</li>
+     *     <li>Otherwise, if the entity {@code @Id} value is {@code null}, the entity is treated as new</li>
+     *     <li>Otherwise the entity is treated as not new and will be merged</li>
+     * </ul>
+     * This does not perform a database existence check.
+     *
+     * @param entity The entity
+     * @param <S>    The entity generic type
+     * @return The managed instance (merged) or the original instance (persisted)
+     * @since 5.1
+     */
+    default @NonNull <S extends E> S persistOrMerge(@NonNull S entity) {
+        RuntimePersistentEntity<S> persistentEntity = new RuntimePersistentEntity<>((Class<S>) entity.getClass());
+
+        if (persistentEntity.hasVersion()) {
+            Object version = persistentEntity.getVersion().getProperty().get(entity);
+            if (version == null) {
+                persist(entity);
+                return entity;
+            }
+        }
+        if (persistentEntity.hasIdentity()) {
+            Object id = persistentEntity.getIdentity().getProperty().get(entity);
+            if (id == null) {
+                persist(entity);
+                return entity;
+            }
+        }
+        return merge(entity);
+    }
+
     @NonNull
     @Override
     <S extends E> List<S> saveAll(@NonNull Iterable<S> entities);
