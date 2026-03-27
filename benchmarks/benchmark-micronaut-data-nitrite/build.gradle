@@ -1,6 +1,14 @@
 plugins {
     id "io.micronaut.build.internal.data-micronaut-benchmark"
+//    id "io.github.sfkamath.jvm-hotpath" version "0.2.7"
 }
+
+//jvmHotpath {
+//    packages.set('io.micronaut.data.nitrite')
+//    sourcepath.set('../../data-nitrite/src/main/java')
+//    instrumentTests.set(true)
+//    output.set("${layout.buildDirectory.get()}/jvm-hotpath/execution-report.html")
+//}
 
 dependencies {
     annotationProcessor projects.micronautDataDocumentProcessor
@@ -8,4 +16,26 @@ dependencies {
     implementation libs.nitrite.rocksdb.adapter
     implementation libs.nitrite.spatial
     runtimeOnly mn.snakeyaml
+
+    // Force newer ASM for JMH so jvm-hotpath agent can parse Java 17+ bytecode
+//    jmh 'org.ow2.asm:asm:9.9.1'
+//    jmh 'org.ow2.asm:asm-commons:9.9.1'
+//    jmh 'org.ow2.asm:asm-tree:9.9.1'
+//    jmh 'org.ow2.asm:asm-analysis:9.9.1'
+//    jmh 'org.ow2.asm:asm-util:9.9.1'
 }
+
+jmh {
+    warmupIterations = 1
+    iterations = 1
+    fork = 1
+    resultFormat = 'CSV'
+}
+//
+//afterEvaluate {
+//    def agentJar = configurations.jvmHotpathAgent.files.find { it.name.startsWith('jvm-hotpath-agent') && it.name.endsWith('.jar') }.absolutePath
+//    def args = "packages=io.micronaut.data.nitrite,sourcepath=../../data-nitrite/src/main/java,instrumentTests=true,append=true,flushInterval=1,output=${layout.buildDirectory.get().asFile.absolutePath}/jvm-hotpath/execution-report.html"
+//    tasks.named("jmh").configure {
+//        jvmArgsAppend = ["-javaagent:${agentJar}=${args}"]
+//    }
+//}

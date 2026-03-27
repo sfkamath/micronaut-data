@@ -18,4 +18,15 @@ public interface BookRepository extends CrudRepository<Book, String> {
     // Exercises Dynamic Query fallback/deduplication
     @Query("{\"pages\": {\"$eq\": :pages}}")
     List<Book> findByPagesQuery(int pages);
+
+    // Association queries (MANY_TO_ONE)
+    List<Book> findByAuthorId(String authorId);
+    List<Book> findByAuthor(Author author);
+
+    // Regex/LIKE query - tests pre-compiled Pattern optimization
+    @Query("{\"title\": {\"$regex\": :regex}}")
+    List<Book> findByTitleRegex(String regex);
+
+    // Scalar projections - tests convertValue() for projected results
+    int countByPagesGreaterThan(int pages);
 }

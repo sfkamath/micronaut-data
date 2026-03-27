@@ -38,7 +38,7 @@ lombok = "1.18.42"
 
 benchmark-spring-data = "2024.1.10"
 spock = "2.2-groovy-4.0"
-testcontainers = "1.19.4"
+testcontainers = "2.0.4"
 jmh = "1.37"
 
 # Gradle plugins

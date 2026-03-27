@@ -1,6 +1,16 @@
 plugins {
     id "io.micronaut.build.internal.data-module"
     id "groovy"
+     id "io.github.sfkamath.llm-build-compactor" version "0.3.0"
+     id "io.github.sfkamath.jvm-hotpath" version "0.2.9"
+}
+
+jvmHotpath {
+    packages.set('io.micronaut.data.nitrite,org.dizitart.no2')
+    sourcepath.set('src/main/java:/Users/sfk/Developer/nitrite-java/nitrite/src/main/java:/Users/sfk/Developer/nitrite-java/nitrite-jackson-mapper/src/main/java:/Users/sfk/Developer/nitrite-java/nitrite-mvstore-adapter/src/main/java:/Users/sfk/Developer/nitrite-java/nitrite-rocksdb-adapter/src/main/java:/Users/sfk/Developer/nitrite-java/nitrite-spatial/src/main/java')
+    instrumentTests.set(true)
+    append.set(true)
+    output.set("${layout.buildDirectory.get()}/jvm-hotpath/execution-report.html")
 }
 
 // Source sets for testing with optional dependencies present
