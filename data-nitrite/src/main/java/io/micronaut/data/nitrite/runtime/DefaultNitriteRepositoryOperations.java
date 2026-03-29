@@ -75,6 +75,9 @@ import org.dizitart.no2.collection.Document;
 import org.dizitart.no2.collection.FindOptions;
 import org.dizitart.no2.collection.NitriteCollection;
 import org.dizitart.no2.collection.UpdateOptions;
+import org.dizitart.no2.collection.events.CollectionEventListener;
+import org.dizitart.no2.collection.events.EventAware;
+import io.micronaut.data.nitrite.event.NitriteMicronautEventBridge;
 import org.dizitart.no2.common.SortOrder;
 import org.dizitart.no2.filters.Filter;
 import org.dizitart.no2.index.IndexOptions;
@@ -192,9 +195,12 @@ public final class DefaultNitriteRepositoryOperations extends AbstractRepository
   private final jakarta.persistence.criteria.CriteriaBuilder criteriaBuilder;
   private final NitriteCriteriaExecutor criteriaExecutor;
   private final NitriteQueryExecutor queryExecutor;
+  private final NitriteMicronautEventBridge eventBridge;
   private final Set<String> indexedCollections = ConcurrentHashMap.newKeySet();
   /** Cache for non-transactional collections - keyed by collection name to handle discriminators. */
   private final Map<String, NitriteCollection> collectionCache = new ConcurrentHashMap<>();
+  /** Track event bridge subscriptions per collection. */
+  private final Map<String, String> collectionSubscriptions = new ConcurrentHashMap<>();
 
   /**
    * Create Nitrite repository operations.
@@ -216,7 +222,8 @@ public final class DefaultNitriteRepositoryOperations extends AbstractRepository
       final DataConversionService conversionService,
       final AttributeConverterRegistry attributeConverterRegistry,
       final NitriteTransactionHolder transactionHolder,
-      final ObjectMapper serdeObjectMapper) {
+      final ObjectMapper serdeObjectMapper,
+      final NitriteMicronautEventBridge eventBridge) {
     super(dateTimeProvider, runtimeEntityRegistry, conversionService, attributeConverterRegistry);
     this.database = database;
     this.configuration = configuration;
@@ -225,6 +232,7 @@ public final class DefaultNitriteRepositoryOperations extends AbstractRepository
             conversionService, serdeObjectMapper, database.getConfig().nitriteMapper(), runtimeEntityRegistry);
     this.entityMapper.setHelper(this);
     this.transactionHolder = transactionHolder;
+    this.eventBridge = eventBridge;
     this.queryParser = new NitriteQueryParser();
     // Create filter builder with sub-query executor for auto-join on MANY_TO_ONE associations
     this.filterBuilder = createFilterBuilderWithSubQueryExecutor();
@@ -516,10 +524,29 @@ public final class DefaultNitriteRepositoryOperations extends AbstractRepository
       collection = transactionHolder.get().getCollection(name);
     } else {
       // Non-transaction path: safe to cache by collection name (handles discriminators)
-      collection = collectionCache.computeIfAbsent(name, k -> database.getCollection(k));
+      collection = collectionCache.computeIfAbsent(name, k -> {
+        NitriteCollection newCollection = database.getCollection(k);
+        // Subscribe the event bridge to listen to collection events
+        subscribeEventBridge(newCollection, name);
+        return newCollection;
+      });
     }
     ensureIndexes(type, collection, name);
     return collection;
+  }
+
+  /**
+   * Subscribes the Micronaut event bridge to a collection if not already subscribed.
+   */
+  private void subscribeEventBridge(NitriteCollection collection, String collectionName) {
+    if (eventBridge != null && collection instanceof EventAware) {
+      collectionSubscriptions.computeIfAbsent(collectionName, key -> {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Subscribing event bridge to collection: {}", collectionName);
+        }
+        return ((EventAware) collection).subscribe(eventBridge);
+      });
+    }
   }
 
   private void ensureIndexes(Class<?> type, NitriteCollection collection, String name) {
@@ -1819,5 +1846,26 @@ public final class DefaultNitriteRepositoryOperations extends AbstractRepository
     List<R> list = new ArrayList<>();
     findAll(q).forEach(list::add);
     return list;
+  }
+
+  @Override
+  public <T> String subscribeCollectionEventListener(Class<T> entityType, CollectionEventListener listener) {
+    NitriteCollection collection = getCollection(entityType);
+    if (collection instanceof EventAware) {
+      return ((EventAware) collection).subscribe(listener);
+    }
+    throw new IllegalStateException("Collection for entity " + entityType.getName() + " does not support event listeners");
+  }
+
+  @Override
+  public void unsubscribeCollectionEventListener(String subscription) {
+    // Event listeners are registered per-collection, so we need to unsubscribe from all collections
+    // The subscription ID is unique across all collections
+    for (String collectionName : database.listCollectionNames()) {
+      NitriteCollection collection = database.getCollection(collectionName);
+      if (collection instanceof EventAware) {
+        ((EventAware) collection).unsubscribe(subscription);
+      }
+    }
   }
 }

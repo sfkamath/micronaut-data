@@ -18,6 +18,7 @@ package io.micronaut.data.nitrite.operations;
 import io.micronaut.data.operations.PrimaryRepositoryOperations;
 import java.io.Serializable;
 import org.dizitart.no2.Nitrite;
+import org.dizitart.no2.collection.events.CollectionEventListener;
 import org.dizitart.no2.repository.ObjectRepository;
 
 /**
@@ -52,4 +53,21 @@ public interface NitriteRepositoryOperations extends PrimaryRepositoryOperations
    * @param <T> the entity type
    */
   <T> ObjectRepository<T> getRepository(Class<T> entityType, String discriminator);
+
+  /**
+   * Subscribe a listener to collection events for the given entity type.
+   *
+   * @param entityType the entity type
+   * @param listener the event listener to subscribe
+   * @return the subscription ID (use this to unsubscribe later)
+   * @param <T> the entity type
+   */
+  <T> String subscribeCollectionEventListener(Class<T> entityType, CollectionEventListener listener);
+
+  /**
+   * Unsubscribe a listener from collection events.
+   *
+   * @param subscription the subscription ID returned from subscribeCollectionEventListener
+   */
+  void unsubscribeCollectionEventListener(String subscription);
 }

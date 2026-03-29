@@ -28,6 +28,7 @@ import io.micronaut.core.util.StringUtils;
 import io.micronaut.data.model.runtime.AttributeConverterRegistry;
 import io.micronaut.data.model.runtime.RuntimeEntityRegistry;
 import io.micronaut.data.nitrite.conf.NitriteConfiguration;
+import io.micronaut.data.nitrite.event.NitriteMicronautEventBridge;
 import io.micronaut.data.nitrite.operations.NitriteRepositoryOperations;
 import io.micronaut.data.nitrite.transaction.NitriteTransactionHolder;
 import io.micronaut.data.runtime.convert.DataConversionService;
@@ -228,7 +229,8 @@ public final class NitriteOperationsFactory {
       DataConversionService conversionService,
       AttributeConverterRegistry attributeConverterRegistry,
       NitriteTransactionHolder transactionHolder,
-      io.micronaut.serde.ObjectMapper serdeObjectMapper) {
+      io.micronaut.serde.ObjectMapper serdeObjectMapper,
+      NitriteMicronautEventBridge eventBridge) {
     return new DefaultNitriteRepositoryOperations(
         database,
         configuration,
@@ -237,7 +239,8 @@ public final class NitriteOperationsFactory {
         conversionService,
         attributeConverterRegistry,
         transactionHolder,
-        serdeObjectMapper);
+        serdeObjectMapper,
+        eventBridge);
   }
 
   /**
