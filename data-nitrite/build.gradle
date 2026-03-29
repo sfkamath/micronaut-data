@@ -36,9 +36,6 @@ configurations {
     spatialPresentTestRuntimeOnly {
         extendsFrom configurations.testRuntimeOnly
     }
-    spatialPresentTestCompileOnly {
-        extendsFrom configurations.testCompileOnly
-    }
     spatialPresentTestAnnotationProcessor {
         extendsFrom configurations.testAnnotationProcessor
     }
@@ -87,7 +84,7 @@ dependencies {
     // Optional dependency tests - ROCKSDB adapter (only for rocksDbPresentTest source set)
     rocksDbPresentTestRuntimeOnly libs.nitrite.rocksdb.adapter
     // Optional dependency tests - Spatial module (only for spatialPresentTest source set)
-    spatialPresentTestCompileOnly libs.nitrite.spatial
+    spatialPresentTestImplementation libs.nitrite.spatial
     spatialPresentTestRuntimeOnly libs.nitrite.spatial
     spatialPresentTestRuntimeOnly libs.jackson.datatype.jts
     spatialPresentTestAnnotationProcessor projects.micronautDataNitrite
