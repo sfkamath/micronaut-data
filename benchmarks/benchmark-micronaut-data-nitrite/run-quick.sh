@@ -27,7 +27,7 @@ if [ -f "$JMH_DEFAULT_RESULTS" ]; then
     echo "Results saved to: $RESULTS_FILE"
     echo ""
     echo "Quick summary:"
-    column -t -s',' "$RESULTS_FILE" | head -20
+    column -t -s',' "$RESULTS_FILE"
 else
     echo "No results file generated."
     exit 1
