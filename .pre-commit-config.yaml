@@ -1,0 +1,31 @@
+---
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+
+  - repo: local
+    hooks:
+      - id: shfmt-benchmark-scripts
+        name: Format benchmark shell scripts
+        entry: shfmt -w -s -i 4
+        language: system
+        files: ^benchmarks/benchmark-micronaut-data-nitrite/.*\.sh$
+
+      - id: shellcheck-benchmark-scripts
+        name: Shellcheck benchmark shell scripts
+        entry: shellcheck -x
+        language: system
+        files: ^benchmarks/benchmark-micronaut-data-nitrite/.*\.sh$
+
+      - id: bats-benchmark-scripts
+        name: Run benchmark script Bats tests
+        entry: bats benchmarks/benchmark-micronaut-data-nitrite/tests/
+        language: system
+        files: ^benchmarks/benchmark-micronaut-data-nitrite/
+        pass_filenames: false

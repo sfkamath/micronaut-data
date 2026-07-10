@@ -106,7 +106,7 @@ public class SimpleQuery {
         bookRepository.findByPagesQuery(700);
     }
 
-    public static void main(String[] args) throws RunnerException {
+    static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(".*" + SimpleQuery.class.getSimpleName() + ".*")
                 .warmupIterations(3)

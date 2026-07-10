@@ -1,0 +1,272 @@
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+// Resolve nitrite source JARs from Gradle cache using version catalog
+def nitriteVersion = libs.versions.nitrite.get()
+def nitriteSources = [
+    'nitrite',
+    'nitrite-mvstore-adapter',
+    'nitrite-jackson-mapper',
+    'nitrite-spatial',
+    'nitrite-rocksdb-adapter'
+].collect { artifact ->
+    def config = configurations.detachedConfiguration(
+        dependencies.create("org.dizitart:${artifact}:${nitriteVersion}:sources")
+    )
+    return config.files.collect { it.absolutePath }
+}.flatten().join(':')
+
+jvmHotpath {
+    packages.set('io.micronaut.data.nitrite,org.dizitart.no2')
+    // Only add nitrite source JARs - local sources are auto-included by plugin
+    sourcepath.set(nitriteSources)
+    // Do NOT instrument the standard `test` task - hotpath is opt-in via the
+    // dedicated `hotpathTest` task below so it never runs unintentionally.
+    instrumentTests.set(false)
+    append.set(true)
+    output.set("${layout.buildDirectory.get()}/jvm-hotpath/execution-report.html")
+}
+
+llmCompactor {
+    compressStackFrames = true
+    showFailedTestLogs = false
+    showFixTargets = false
+}
+
+configurations {
+    jacocoAgent
+    jacocoCli
+}
+
+dependencies {
+    // Per-test (testwise) coverage collector - version MUST match jacocoAgent (0.8.14)
+    testImplementation "org.jacoco:org.jacoco.agent:0.8.14:runtime"
+    testImplementation "org.junit.platform:junit-platform-launcher"
+
+    jacocoAgent("org.jacoco:org.jacoco.agent:0.8.14:runtime")
+    jacocoCli "org.jacoco:org.jacoco.cli:0.8.14"
+}
+
+// Shared jvm-hotpath agent injection, used by hotpathTest and its rocksDb/spatial
+// counterparts below so all three append hits into the same execution report.
+def injectHotpathAgent(Test task, String nitriteSourcesPath, String packages = 'io.micronaut.data.nitrite,org.dizitart.no2') {
+    task.doFirst {
+        def agentJar = configurations.jvmHotpathAgent.files.find {
+            it.name.startsWith('jvm-hotpath-agent') && it.name.endsWith('.jar')
+        }.absolutePath
+        def localSources = sourceSets.main.allSource.srcDirs
+            .findAll { it.exists() }.collect { it.absolutePath }
+        def sp = (localSources + [nitriteSourcesPath]).findAll { it }.join(':')
+        def agentArgs = "packages=${packages}," +
+            "sourcepath=${sp},append=true," +
+            "output=${layout.buildDirectory.get().asFile.absolutePath}/jvm-hotpath/execution-report.html"
+        task.jvmArgs = task.jvmArgs + ["-javaagent:${agentJar}=${agentArgs}"]
+    }
+}
+
+// Opt-in hot-path frequency analysis over the main test suite.
+// Manually injects the jvm-hotpath agent (instrumentTests=false above keeps it
+// off the standard `test` task). Run: ./gradlew :micronaut-data-nitrite:hotpathTest
+tasks.register('hotpathTest', Test) {
+    group = "verification"
+    description = "Run the test suite with jvm-hotpath instrumentation (frequency report)"
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    injectHotpathAgent(delegate, nitriteSources)
+}
+
+// rocksDbPresentTest/spatialPresentTest counterparts, appending into the same report
+// as hotpathTest - mirrors the coverageTest/coverageRocksDbPresentTest/coverageSpatialPresentTest
+// trio so the hotpath report also covers code paths only exercised by those optional-dependency suites.
+tasks.register('hotpathRocksDbPresentTest', Test) {
+    group = "verification"
+    description = "Run rocksDbPresentTest with jvm-hotpath instrumentation (appends to shared report)"
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.rocksDbPresentTest.output.classesDirs
+    classpath = sourceSets.rocksDbPresentTest.runtimeClasspath
+    mustRunAfter tasks.named('hotpathTest')
+    // Excludes org.dizitart.no2.rocksdb: instrumenting its Kryo-based serializer classes
+    // throws a bytecode ClassFormatError (bad StackMapTable offset). Our own code doesn't
+    // live in that package anyway, so this only loses hotpath data for RocksDB's internals.
+    injectHotpathAgent(delegate, nitriteSources, 'io.micronaut.data.nitrite')
+}
+
+tasks.register('hotpathSpatialPresentTest', Test) {
+    group = "verification"
+    description = "Run spatialPresentTest with jvm-hotpath instrumentation (appends to shared report)"
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.spatialPresentTest.output.classesDirs
+    classpath = sourceSets.spatialPresentTest.runtimeClasspath
+    mustRunAfter tasks.named('hotpathRocksDbPresentTest')
+    injectHotpathAgent(delegate, nitriteSources)
+}
+
+ext.jacocoExecFile = "${buildDir}/jacoco/coverage.exec"
+
+tasks.register('coverageTest', Test) {
+    group = "coverage"
+    description = "Run tests with JaCoCo coverage"
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    shouldRunAfter test
+    if (project.hasProperty('excludeMongoport')) {
+        filter.excludeTestsMatching "io.micronaut.data.nitrite.mongoport.*"
+        filter.failOnNoMatchingTests = false
+    }
+    doFirst {
+        def agentJar = configurations.jacocoAgent.files.find { it.name.contains("jacoco.agent") }
+        def filtered = jvmArgs.findAll { !it.contains('jvm-hotpath-agent') }
+        filtered.add("-javaagent:$agentJar=destfile=${jacocoExecFile},append=false")
+        jvmArgs = filtered
+    }
+}
+
+// Per-test (testwise) coverage - same agent attach as coverageTest, but the
+// generated JvmCoverageTestwiseListener dumps a per-test .exec to
+// build/jvm-coverage/testwise. Sequential (maxParallelForks=1) is required so
+// per-test execution data is not interleaved across forks.
+tasks.register('jvmCoverageMCPTest', Test) {
+    group = "coverage"
+    description = "Run the test suite with per-test (testwise) coverage tracking"
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    maxParallelForks = 1
+    systemProperty 'jvm-coverage-mcp.testwise.enabled', 'true'
+    doFirst {
+        def agentJar = configurations.jacocoAgent.files.find { it.name.contains("jacoco.agent") }
+        def filtered = jvmArgs.findAll { !it.contains('jvm-hotpath-agent') }
+        filtered.add("-javaagent:$agentJar=destfile=${jacocoExecFile},append=false")
+        jvmArgs = filtered
+    }
+}
+
+tasks.register('coverageRocksDbPresentTest', Test) {
+    group = "coverage"
+    description = "Run rocksDbPresentTest with JaCoCo coverage (appends to shared exec)"
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.rocksDbPresentTest.output.classesDirs
+    classpath = sourceSets.rocksDbPresentTest.runtimeClasspath
+    mustRunAfter tasks.named('coverageTest')
+    doFirst {
+        def agentJar = configurations.jacocoAgent.files.find { it.name.contains("jacoco.agent") }
+        def filtered = jvmArgs.findAll { !it.contains('jvm-hotpath-agent') }
+        filtered.add("-javaagent:$agentJar=destfile=${jacocoExecFile},append=true")
+        jvmArgs = filtered
+    }
+}
+
+tasks.register('coverageSpatialPresentTest', Test) {
+    group = "coverage"
+    description = "Run spatialPresentTest with JaCoCo coverage (appends to shared exec)"
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.spatialPresentTest.output.classesDirs
+    classpath = sourceSets.spatialPresentTest.runtimeClasspath
+    mustRunAfter tasks.named('coverageRocksDbPresentTest')
+    doFirst {
+        def agentJar = configurations.jacocoAgent.files.find { it.name.contains("jacoco.agent") }
+        def filtered = jvmArgs.findAll { !it.contains('jvm-hotpath-agent') }
+        filtered.add("-javaagent:$agentJar=destfile=${jacocoExecFile},append=true")
+        jvmArgs = filtered
+    }
+}
+
+tasks.register('coverageReport') {
+    group = "coverage"
+    description = "Generate merged JaCoCo HTML and XML report from all three test suites"
+    dependsOn classes, tasks.named('coverageTest'), tasks.named('coverageRocksDbPresentTest'), tasks.named('coverageSpatialPresentTest')
+    doLast {
+        generateJacocoReport()
+    }
+}
+
+// Run the JaCoCo coverage report, then the hot-path frequency report, in sequence.
+// Sequenced (not parallel) so the two agents never instrument the same classes at once.
+tasks.register('coverageAndHotpath') {
+    group = "coverage"
+    description = "Run coverageReport then the full hotpath trio (test/rocksDb/spatial), in sequence"
+    dependsOn tasks.named('coverageReport'), tasks.named('hotpathTest'),
+        tasks.named('hotpathRocksDbPresentTest'), tasks.named('hotpathSpatialPresentTest')
+}
+tasks.named('hotpathTest').configure {
+    mustRunAfter tasks.named('coverageReport')
+}
+
+// Convenience task: run coverageTest with a filtered test pattern and generate report.
+// Usage: ./gradlew :micronaut-data-nitrite:coverageReportForTest -PtestPattern="*NitriteProjectionSpec"
+// Skips rocksDbPresentTest and spatialPresentTest to save time during targeted coverage work.
+tasks.register('coverageReportForTest') {
+    group = "coverage"
+    description = "Run coverageTest with -PtestPattern filter and generate JaCoCo report (skips rocksDb/spatial test suites)"
+    dependsOn classes, tasks.named('coverageTest')
+    doLast {
+        generateJacocoReport()
+    }
+}
+
+// Apply -PtestPattern filter to coverageTest at configuration time (not in doFirst)
+// so the filter is in place before the test task executes.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.hasTask(tasks.named('coverageReportForTest').get())) {
+        def pattern = project.findProperty('testPattern')
+        if (pattern) {
+            tasks.named('coverageTest').configure {
+                filter.includeTestsMatching(pattern.toString())
+                filter.failOnNoMatchingTests = false
+            }
+        }
+    }
+}
+
+// Shared report generation logic used by both coverageReport and coverageReportForTest
+def generateJacocoReport() {
+    def execFile = file(jacocoExecFile)
+    def cp = configurations.jacocoCli.asPath
+    def srcDirs = sourceSets.main.allSource.srcDirs.collect { it as String }.findAll { file(it).exists() }
+    def outDir = layout.buildDirectory.dir("reports/jacoco").get().asFile
+    outDir.mkdirs()
+
+    def stagingDir = layout.buildDirectory.dir("jacoco-staging/classes").get().asFile
+    stagingDir.deleteDir()
+    stagingDir.mkdirs()
+    sourceSets.main.output.classesDirs.each { dir ->
+        if (dir.exists()) {
+            project.copy {
+                from dir
+                into stagingDir
+//                exclude 'io/micronaut/data/nitrite/model/query/builder/compile/**'
+            }
+        }
+    }
+
+    def argsList = ["java", "-cp", cp, "org.jacoco.cli.internal.Main",
+                    "report", "$execFile",
+                    "--classfiles", stagingDir]
+    srcDirs.each { argsList.addAll(["--sourcefiles", it]) }
+    argsList.addAll(["--html", outDir,
+                     "--xml", new File(outDir, "jacoco.xml"),
+                     "--name", "Micronaut Data Nitrite"])
+
+    def proc = argsList.execute()
+    proc.waitFor()
+    if (proc.exitValue() != 0) {
+        throw new GradleException("JaCoCo report generation failed:\n${proc.err.text}")
+    }
+}
+
+// Forward `test --tests <pattern>` to the present-test tasks so a targeted run
+// does not execute their full suites. Patterns that match nothing in a given
+// source set simply produce an empty run instead of failing.
+gradle.taskGraph.whenReady {
+    def cliPatterns = tasks.named('test').get().filter.commandLineIncludePatterns
+    if (cliPatterns) {
+        [tasks.named('rocksDbPresentTest').get(), tasks.named('spatialPresentTest').get()].each { t ->
+            cliPatterns.each { t.filter.includeTestsMatching(it) }
+            t.filter.failOnNoMatchingTests = false
+        }
+    }
+}

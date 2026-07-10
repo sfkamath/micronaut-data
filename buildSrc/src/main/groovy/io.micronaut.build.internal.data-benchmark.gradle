@@ -42,8 +42,11 @@ tasks.named("run") {
 
 jmh {
     duplicateClassesStrategy = DuplicatesStrategy.EXCLUDE
+    jvmArgsPrepend = ['--sun-misc-unsafe-memory-access=allow']
 }
 
 jmhJar {
+    configurations = [project.configurations.runtimeClasspath]
     mergeServiceFiles()
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

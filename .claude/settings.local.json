@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "jacoco-mcp",
+    "code-review-graph"
+  ]
+}

@@ -1,8 +1,12 @@
 plugins {
+    id "io.github.sfkamath.llm-build-compactor" version "0.4.2"
+    id "io.github.sfkamath.jvm-hotpath" version "0.2.12"
+    id "jacoco"
     id "io.micronaut.build.internal.data-module"
     id "groovy"
     id "io.micronaut.test-resources"
 }
+apply from: "$rootDir/data-nitrite/data-nitrite-harness.gradle"
 
 micronaut {
     version libs.versions.micronaut.platform.get()

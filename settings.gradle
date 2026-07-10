@@ -1,5 +1,10 @@
 pluginManagement {
     repositories {
+        mavenLocal {
+            content {
+                includeGroupByRegex 'io\\.github\\.sfkamath.*'
+            }
+        }
         gradlePluginPortal()
         mavenCentral()
     }
@@ -14,6 +19,11 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 dependencyResolutionManagement {
     repositories {
         mavenCentral()
+        mavenLocal {
+            content {
+                includeGroupByRegex 'io\\.github\\.sfkamath.*'
+            }
+        }
     }
 }
 
