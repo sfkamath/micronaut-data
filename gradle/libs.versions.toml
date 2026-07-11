@@ -21,7 +21,7 @@ micronaut-logging = "2.0.0"
 micronaut-flyway = "8.0.0"
 micronaut-coherence = "6.0.0"
 #micronaut-sourcegen = "2.0.0-RC3"
-nitrite = "4.3.2"
+nitrite = "4.4.2"
 jackson-datatype-jts = "2.21.0"
 
 groovy = "5.0.6"
